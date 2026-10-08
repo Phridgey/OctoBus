@@ -102,5 +102,5 @@ The Ratchet boat cannot be seen from Orgrimmar, so its row is always an estimate
 - **Times have a `~` and never confirm**: walk toward the towers and wait for an arrival, or run `/ob calibrate`.
 - **`/ob` does nothing or prints a start-up error**: the addon reports its own load errors in chat; copy the message when reporting a bug.
 - **Window did not auto-show**: use `/ob where` to see your zone and sub-zone names, then `/ob allow <name>` if you want it there.
-- **Ratchet times look wrong**: it has probably been a long time, or there was a server restart, since anyone with the addon saw it. Visit Ratchet with the window open and wait for the boat to dock.
+- **Ratchet times look wrong**: it has probably been a long time, or there was a server restart, since you last saw it. Visit Ratchet with the window open and wait for the boat to dock.
 - **Everything looks off after a big server change** (new route timings): `/ob reset`, then calibrate again.
