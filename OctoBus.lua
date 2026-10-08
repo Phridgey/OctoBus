@@ -25,15 +25,19 @@
     /ob sound|chat|flash    toggle that alert type
     /ob zone                toggle "auto-show only in Orgrimmar / Durotar"
     /ob boat                show / hide the Sparkwater Port boat
+    /ob scale <n>           window size, 0.6 to 2 (or drag the dots in the bottom-right corner)
     /ob shape square|round|auto   minimap icon placement (auto looks at your minimap)
     /ob where               print your zone / sub-zone and whether the window auto-shows
     /ob allow <name>        also auto-show in this zone or sub-zone
+    /ob disallow <name>     take a place off that list
     /ob name <n> <text>     rename route number n (from /ob list)
     /ob period <n> <sec>    set a route's cycle length by hand
     /ob calibrate           optional: watch every transport on purpose (stand between the towers).
                             Not required: any arrival you see near the towers calibrates automatically.
     /ob reset               forget everything learned (back to built-in values)
+    /ob travel <sec>        Ratchet boat: your travel time from Orgrimmar to the Ratchet dock
     /ob debug               show what the DLL is returning
+    /ob debug on|off        record every transport the DLL reports to the saved file
 ]]
 
 -- Stage 1: runs as soon as this file loads, so /ob always answers, even if the real
@@ -56,11 +60,18 @@ local OB_OK, OB_ERR = pcall(function ()
   -- time() of one observed arrival. Real observations replace them automatically.
   ------------------------------------------------------------------------
   local ROUTES = {
-    { entry = 164871, name = "Undercity", x = 1318.1, y = -4658.0, period = 356.3, dwell = 63, anchor = 1791422404 },
-    { entry = 175080, name = "Grom'gol", x = 1360.8, y = -4631.3, period = 303.5, dwell = 63, anchor = 1791422441 },
-    { entry = 190552, name = "Kargath", x = 1206.1, y = -4158.7, period = 374.0, dwell = 63, anchor = 1791422484 },
-    { entry = 190549, name = "Thunder Bluff", x = 1125.4, y = -4135.0, period = 567.0, dwell = 63, anchor = 1791422131 },
-    { entry = 190550, name = "Sparkwater boat", x = 876.1,  y = -5204.1, period = 244.75, dwell = 43, anchor = 1791422323, boat = true },
+    { entry = 164871, name = "Undercity", kind = "zeppelin", x = 1318.1, y = -4658.0, period = 356.3, dwell = 63, anchor = 1791422404 },
+    { entry = 175080, name = "Grom'gol", kind = "zeppelin", x = 1360.8, y = -4631.3, period = 303.5, dwell = 63, anchor = 1791422441 },
+    { entry = 190552, name = "Kargath", kind = "zeppelin", x = 1206.1, y = -4158.7, period = 374.0, dwell = 63, anchor = 1791422484 },
+    { entry = 190549, name = "Thunder Bluff", kind = "zeppelin", x = 1125.4, y = -4135.0, period = 567.0, dwell = 63, anchor = 1791422131 },
+    { entry = 190550, name = "Sparkwater", kind = "boat", x = 876.1,  y = -5204.1, period = 244.75, dwell = 43, anchor = 1791422323, boat = true },
+    -- Ratchet -> Booty Bay boat, timed at the Ratchet dock. Never visible from Orgrimmar, so
+    -- the row shows when to fly out ("fly") rather than when it docks. Measured on two rides
+    -- (8 Oct 2026): Ratchet arrivals 1791479926.67 and 1791480654.81 are 2 cycles apart
+    -- (364.07 s; legs 64 s dock + 114.8 s crossing + 64.2 s Booty Bay + 121.1 s back).
+    -- origin seeds the baseline so later arrivals keep refining the cycle.
+    { entry = 20808, name = "Ratchet", kind = "boat", x = -1005.6, y = -3841.6, period = 364.07,
+      dwell = 64, anchor = 1791480654.81, origin = 1791479926.67, far = true },
   }
   local DOCK_RADIUS = 2.0
 
@@ -97,6 +108,8 @@ local OB_OK, OB_ERR = pcall(function ()
       c.allow = c.allow or {}
       if c.hideBoat == nil then c.hideBoat = false end
       if c.locked == nil then c.locked = false end
+      if c.travel == nil then c.travel = 150 end
+      t.pending = t.pending or {}
       if c.ver ~= 2 then   -- v2: alerts are opt-in per route (bell) and chat-only by default
         c.ver = 2
         c.chat = true
@@ -126,7 +139,10 @@ local OB_OK, OB_ERR = pcall(function ()
     return string.format("%d:%02d", math.floor(s / 60), math.mod(s, 60))
   end
 
-  local function RouteName(r) return DB.names[r.entry] or r.name end
+  -- "<place> <kind>": the place can be renamed with /ob name; in the window the kind is
+  -- shown in the same grey as the "docks" / "leaves" labels.
+  local function RouteName(r) return (DB.names[r.entry] or r.name) .. " " .. r.kind end
+  local function RowName(r) return (DB.names[r.entry] or r.name) .. " |cffaaaaaa" .. r.kind .. "|r" end
   local function Period(r)    return DB.period[r.entry] or r.period end
   local function Anchor(r)    return DB.anchor[r.entry] or r.anchor end
   local function Watched(r)   return DB.bell[r.entry] == true end
@@ -178,34 +194,27 @@ local OB_OK, OB_ERR = pcall(function ()
     return string.format("%.1f days", sec / 86400)
   end
 
-  -- footer text, and whether it should be highlighted
+  -- footer text, and whether it should be highlighted: names the transport whose latest
+  -- sighting is the oldest, and how long ago that was. Orange after 5 days.
   local function CalAgeText()
-    local newestOld, shortest, have, total = nil, nil, 0, 0
-    local now = time()
+    local oldR, oldT = nil, nil
     for i = 1, table.getn(ROUTES) do
       local r = ROUTES[i]
       if Visible(r) then
-        total = total + 1
-        local t = DB.lastObs[r.entry]
-        local o = DB.origin[r.entry]
-        if t and o then
-          have = have + 1
-          if not newestOld or t < newestOld then newestOld = t end      -- longest since seen
-          local span = EpochNow() - o
-          if not shortest or span < shortest then shortest = span end   -- thinnest baseline
-        end
+        local t = math.max(DB.lastObs[r.entry] or 0, DB.anchor[r.entry] or r.anchor or 0)
+        if not oldT or t < oldT then oldR, oldT = r, t end
       end
     end
-    if have == 0 then return "no baseline yet (visit the towers)", true end
-    if have < total then return "baseline: " .. have .. " of " .. total .. " transports", true end
-    local gone = now - newestOld
-    local seen
-    if gone < 3600 then seen = "seen just now"
-    elseif gone < 86400 then seen = "last seen " .. string.format("%.0f", gone / 3600) .. " h ago"
-    else seen = "last seen " .. string.format("%d", math.floor(gone / 86400 + 0.5)) .. "d ago" end
+    if not oldR then return "", false end
+    if oldT <= 0 then return "oldest data: " .. RouteName(oldR) .. ", never seen", true end
+    local gone = time() - oldT
+    local ago
+    if gone < 120 then ago = "just now"
+    elseif gone < 3600 then ago = math.floor(gone / 60 + 0.5) .. " min ago"
+    elseif gone < 86400 then ago = string.format("%.0f", gone / 3600) .. " h ago"
+    else ago = math.floor(gone / 86400 + 0.5) .. " days ago" end
     local stale = (gone >= 5 * 86400)
-    if stale then seen = seen .. ", visit the towers" end
-    return "baseline established: " .. FormatSpan(shortest) .. "  (" .. seen .. ")", stale
+    return "oldest data: " .. RouteName(oldR) .. ", seen " .. ago .. (stale and ", go see it" or ""), stale
   end
 
   local function CalFinish(complete)
@@ -247,7 +256,7 @@ local OB_OK, OB_ERR = pcall(function ()
     local n = 0
     for i = 1, table.getn(ROUTES) do
       local r = ROUTES[i]
-      if Visible(r) then
+      if Visible(r) and not r.far then
         cal.need[r.entry] = DB.origin[r.entry] and 1 or 2
         cal.oldP[r.entry] = Period(r)
         n = n + 1
@@ -275,6 +284,7 @@ local OB_OK, OB_ERR = pcall(function ()
 
   local function OnArrive(r, t)
     local e = r.entry
+    if not DB.origin[e] and r.origin then DB.origin[e] = r.origin end
     local P = Period(r)
     local pstate, psecs = Predict(r)
     local origin = DB.origin[e]
@@ -286,9 +296,26 @@ local OB_OK, OB_ERR = pcall(function ()
       if k >= 1 and math.abs(resid) < 0.25 * P then
         DB.period[e] = delta / k
         DB.lastObs[e] = time()
+        DB.pending[e] = nil
       else
-        DB.origin[e] = t      -- schedule jumped (server restart?): start a new baseline
-        rebased = true
+        -- Does not fit the baseline. One odd sighting is not enough to throw a long
+        -- baseline away: keep it aside, and only start over when a second sighting
+        -- agrees with it (schedule really jumped, e.g. a server restart).
+        local pd = DB.pending[e]
+        local fits = false
+        if pd then
+          local d2 = t - pd
+          local k2 = math.floor(d2 / P + 0.5)
+          fits = k2 >= 1 and math.abs(d2 - k2 * P) < 0.25 * P
+        end
+        if fits then
+          DB.origin[e] = pd
+          DB.pending[e] = nil
+          DB.lastObs[e] = time()
+          rebased = true
+        else
+          DB.pending[e] = t
+        end
       end
     else
       DB.origin[e] = t
@@ -326,6 +353,45 @@ local OB_OK, OB_ERR = pcall(function ()
     confirmed[e] = true
   end
 
+  ------------------------------------------------------------------------
+  -- Recorder (/ob debug on): writes every transport position the DLL reports into
+  -- OctoBusDB.rec, one line per sample, so a trip can be analysed afterwards. A sample is
+  -- kept when the transport moved more than half a yard, or every 5 s while it stands
+  -- still. Zone changes and flight-path start / end are logged too. The game writes the
+  -- saved file on logout or /reload.
+  ------------------------------------------------------------------------
+  local REC_MAX = 40000
+  local recOn = false
+  local recLast = {}
+  local function RecLine(txt)
+    local log = DB.rec
+    if type(log) ~= "table" then log = {}; DB.rec = log end
+    if table.getn(log) >= REC_MAX then return end
+    table.insert(log, txt)
+  end
+  local function Record(now, gid, ge, de, x, y, z)
+    local L = recLast[gid]
+    if L then
+      local dx, dy = x - L.x, y - L.y
+      if dx * dx + dy * dy < 0.25 and (now - L.t) < 5 then return end
+    end
+    recLast[gid] = { x = x, y = y, t = now }
+    RecLine(string.format("%.2f T %s %s %d %.2f %.2f %.2f", now, gid, ge, de, x, y, z))
+  end
+  local recZone, recTaxi = nil, nil
+  local function RecordPlayer(now)
+    local zn = (GetRealZoneText() or "") .. "/" .. (GetSubZoneText() or "")
+    if zn ~= recZone then
+      recZone = zn
+      RecLine(string.format("%.2f Z %s", now, zn))
+    end
+    local tx = UnitOnTaxi("player") and true or false
+    if tx ~= recTaxi then
+      recTaxi = tx
+      RecLine(string.format("%.2f F %s", now, tx and "start" or "end"))
+    end
+  end
+
   local function Poll()
     if type(ZepTransports) ~= "function" then dllOk = false; return end
     local ok, str = pcall(ZepTransports)
@@ -333,16 +399,18 @@ local OB_OK, OB_ERR = pcall(function ()
     dllOk = true
     lastGood = GetTime()
     local now = EpochNow()
+    if recOn then RecordPlayer(now) end
     local present = {}
     for rec in gfind(str, "([^;]+);") do
-      local _, _, tag, ge, de, x, y = string.find(rec, "^%x+,(%x+),(%d+),(%d+),(%-?[%d%.]+),(%-?[%d%.]+),")
+      local _, _, gid, tag, ge, de, x, y, z = string.find(rec, "^(%x+),(%x+),(%d+),(%d+),(%-?[%d%.]+),(%-?[%d%.]+),(%-?[%d%.]+)")
       de = tonumber(de)
       x = tonumber(x)
       y = tonumber(y)
       if de and x and y then
+        if recOn then Record(now, gid, ge, de, x, y, tonumber(z) or 0) end
         for i = 1, table.getn(ROUTES) do
           local r = ROUTES[i]
-          if r.entry == de then
+          if r.entry == de and r.x then
             present[de] = true
             local dx, dy = x - r.x, y - r.y
             local atDock = (math.sqrt(dx * dx + dy * dy) <= DOCK_RADIUS)
@@ -453,7 +521,7 @@ local OB_OK, OB_ERR = pcall(function ()
   end)
 
   -- the timer window
-  local WIDTH = 246
+  local WIDTH = 280
   local ROW_H = 18
   local TOP = 22
 
@@ -462,6 +530,7 @@ local OB_OK, OB_ERR = pcall(function ()
   panel:SetWidth(WIDTH)
   panel:SetHeight(100)
   panel:SetClampedToScreen(true)
+  panel:SetScale(CFG.scale or 1)
   panel:SetMovable(true)
   panel:EnableMouse(true)
   CreateBackdrop(panel)
@@ -498,6 +567,70 @@ local OB_OK, OB_ERR = pcall(function ()
   panel:SetScript("OnDragStart", StartDrag)
   panel:SetScript("OnDragStop", StopDrag)
 
+  -- Resize grip, bottom-right: drag to scale the whole window (0.6x to 2x). The top-left
+  -- corner stays where it is. Hidden while the window is locked.
+  local SCALE_MIN, SCALE_MAX = 0.6, 2.0
+  local grip = CreateFrame("Frame", nil, panel)
+  grip:SetWidth(14)
+  grip:SetHeight(14)
+  grip:SetPoint("BOTTOMRIGHT", panel, "BOTTOMRIGHT", -1, 1)
+  grip:SetFrameLevel(panel:GetFrameLevel() + 10)
+  grip:EnableMouse(true)
+  grip.dots = {}
+  local DOTS = { {3, 3}, {7, 3}, {11, 3}, {3, 7}, {7, 7}, {3, 11} }
+  for i = 1, table.getn(DOTS) do
+    local d = grip:CreateTexture(nil, "OVERLAY")
+    d:SetTexture("Interface\\Buttons\\WHITE8X8")
+    d:SetWidth(2)
+    d:SetHeight(2)
+    d:SetPoint("BOTTOMRIGHT", grip, "BOTTOMRIGHT", -DOTS[i][1] + 1, DOTS[i][2] - 1)
+    d:SetVertexColor(0.5, 0.5, 0.5, 0.9)
+    grip.dots[i] = d
+  end
+  local function GripColor(c)
+    for i = 1, table.getn(grip.dots) do grip.dots[i]:SetVertexColor(c, c, c, 0.9) end
+  end
+
+  -- set a new scale, keeping the window's top-left corner on the same screen spot
+  local function ApplyScale(sc)
+    if sc < SCALE_MIN then sc = SCALE_MIN end
+    if sc > SCALE_MAX then sc = SCALE_MAX end
+    local oldEff = panel:GetEffectiveScale()
+    local l, t = panel:GetLeft(), panel:GetTop()
+    panel:SetScale(sc)
+    CFG.scale = sc
+    if l and t then
+      local newEff = panel:GetEffectiveScale()
+      panel:ClearAllPoints()
+      panel:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", l * oldEff / newEff, t * oldEff / newEff)
+      SavePos()
+    end
+  end
+
+  grip:SetScript("OnEnter", function() GripColor(1) end)
+  grip:SetScript("OnLeave", function() if not this.sizing then GripColor(0.5) end end)
+  grip:SetScript("OnMouseDown", function()
+    if CFG.locked then return end
+    this.sizing = true
+  end)
+  grip:SetScript("OnMouseUp", function()
+    this.sizing = false
+    GripColor(MouseIsOver and MouseIsOver(this) and 1 or 0.5)
+    SavePos()
+  end)
+  grip:SetScript("OnUpdate", function()
+    if not this.sizing then return end
+    local cx = GetCursorPosition()           -- screen pixels
+    local l = panel:GetLeft()
+    if not l then return end
+    local leftPx = l * panel:GetEffectiveScale()
+    local wantEff = (cx - leftPx) / WIDTH     -- window right edge follows the cursor
+    local parentEff = UIParent:GetEffectiveScale()
+    if wantEff > 0 and parentEff > 0 then ApplyScale(wantEff / parentEff) end
+  end)
+
+  if CFG.locked then grip:Hide() end
+
   local rows = {}
 
   local function CreateRow(i)
@@ -525,6 +658,10 @@ local OB_OK, OB_ERR = pcall(function ()
     row.name:SetPoint("LEFT", row.icon, "RIGHT", 4, 0)
     row.name:SetJustifyH("LEFT")
 
+    row.kind = row:CreateFontString(nil, "OVERLAY")
+    row.kind:SetFont(font, 10, "OUTLINE")
+    row.kind:SetTextColor(0.667, 0.667, 0.667)
+
     row.time = row:CreateFontString(nil, "OVERLAY")
     row.time:SetFont(font, 10, "OUTLINE")
     row.time:SetPoint("RIGHT", row, "RIGHT", -20, 0)
@@ -547,15 +684,30 @@ local OB_OK, OB_ERR = pcall(function ()
       if not r then return end
       GameTooltip:SetOwner(this, "ANCHOR_RIGHT")
       GameTooltip:AddLine(RouteName(r), 1, 1, 1)
-      GameTooltip:AddLine("Cycle " .. string.format("%.1f", Period(r)) .. "s, stays " .. string.format("%.0f", Dwell(r)) .. "s   (object " .. r.entry .. ")", 0.7, 0.7, 0.7)
+      GameTooltip:AddLine((Period(r) and ("Cycle " .. string.format("%.1f", Period(r)) .. "s, ") or "Cycle not measured, ") .. "stays " .. string.format("%.0f", Dwell(r)) .. "s   (object " .. r.entry .. ")", 0.7, 0.7, 0.7)
       if DB.origin[r.entry] and DB.anchor[r.entry] then
         local span = DB.anchor[r.entry] - DB.origin[r.entry]
         if span > 60 then
           GameTooltip:AddLine("Cycle measured over " .. (span >= 86400 and string.format("%.1f days", span / 86400) or string.format("%.0f min", span / 60)) .. " of observations.", 0.7, 0.7, 0.7)
         end
       end
+      if r.far then
+        local lo = DB.lastObs[r.entry] or DB.anchor[r.entry] or r.anchor
+        if r.periodGuess and not DB.period[r.entry] then
+          GameTooltip:AddLine("Cycle is a rough estimate until the boat is seen docking at Ratchet once more.", 1, 0.6, 0.2)
+        end
+        GameTooltip:AddLine("fly = when to leave Orgrimmar, sails = when it leaves the Ratchet dock.", 0.7, 0.7, 0.7)
+        GameTooltip:AddLine("Travel time to the dock: " .. CFG.travel .. "s (/ob travel <sec>).", 0.7, 0.7, 0.7)
+        if lo then
+          GameTooltip:AddLine("Last seen at Ratchet " .. FormatSpan(time() - lo) .. " ago. Always an estimate from Orgrimmar.", 0.7, 0.7, 0.7)
+        else
+          GameTooltip:AddLine("Not measured yet: ride it with /ob debug on.", 1, 0.6, 0.2)
+        end
+        GameTooltip:AddLine("Click: " .. (Watched(r) and "remove the bell (no chat alert)" or "add a bell: chat message " .. CFG.alert .. "s before you need to fly"), 0.2, 1, 0.8)
+      else
       GameTooltip:AddLine(confirmed[r.entry] and "Seen this session: exact." or "Not seen this session: estimate (~).", 0.7, 0.7, 0.7)
       GameTooltip:AddLine("Click: " .. (Watched(r) and "remove the bell (no chat alert)" or "add a bell: chat message " .. CFG.alert .. "s before it arrives"), 0.2, 1, 0.8)
+      end
       GameTooltip:Show()
     end)
     row:SetScript("OnLeave", function() GameTooltip:Hide() end)
@@ -579,11 +731,35 @@ local OB_OK, OB_ERR = pcall(function ()
     return ps, psecs
   end
 
+  -- far routes (Ratchet): seconds until the next sailing you can still make, and until
+  -- you have to leave. Sailing = departure from the dock.
+  local function FlyBy(r)
+    local state, secs = Predict(r)
+    if not state then return nil end
+    local sail = secs
+    if state == "wait" then sail = secs + Dwell(r) end
+    local P = Period(r)
+    local fly = sail - CFG.travel
+    while fly < 0 do
+      sail = sail + P
+      fly = fly + P
+    end
+    return fly, sail
+  end
+
   local function RowText(r)
+    if r.far and not seenState[r.entry] then
+      local fly, sail = FlyBy(r)
+      if not fly then return RowName(r), nil, nil, "|cff888888not measured yet|r" end
+      local color = "|cffffffff"
+      if CFG.alert > 0 and fly <= CFG.alert then color = "|cffffaa33" end
+      return RowName(r), "fly", fly, "|cff888888~|r|cffaaaaaafly|r " .. color .. FormatTime(fly) ..
+        "|r |cff777777sails " .. FormatTime(sail) .. "|r"
+    end
     local state, secs = Status(r)
     local est = confirmed[r.entry] and "" or "|cff888888~|r"
     local mark = ""
-    local nm = mark .. RouteName(r)
+    local nm = mark .. RowName(r)
     if state == "docked" then
       if secs then
         return nm, state, secs, est .. "|cff55ff55leaves|r |cffffffff" .. FormatTime(secs) .. "|r"
@@ -602,6 +778,7 @@ local OB_OK, OB_ERR = pcall(function ()
 
   local function Refresh()
     local n = 0
+    local kindL, kindR = nil, nil
     for i = 1, table.getn(ROUTES) do
       local r = ROUTES[i]
       if Visible(r) then
@@ -609,7 +786,8 @@ local OB_OK, OB_ERR = pcall(function ()
         local row = rows[n] or CreateRow(n)
         row:Show()
         row.route = r
-        local nm, state, secs, txt = RowText(r)
+        local _, state, secs, txt = RowText(r)
+        local nm = DB.names[r.entry] or r.name
         if cal and cal.need[r.entry] then
           if (cal.got[r.entry] or 0) >= cal.need[r.entry] then
             nm = "|cff55ff55+|r " .. nm
@@ -619,7 +797,14 @@ local OB_OK, OB_ERR = pcall(function ()
         end
         row.name:SetText(nm)
         row.time:SetText(txt)
-        row.name:SetWidth(WIDTH - 8 - 18 - 4 - 92 - 18)
+        row.kind:SetText(r.kind)
+        local nw, tw = row.name:GetStringWidth(), row.time:GetStringWidth()
+        if type(nw) ~= "number" then nw = 60 end
+        if type(tw) ~= "number" then tw = 60 end
+        local nameRight = 2 + 14 + 4 + nw
+        local timeLeft = (WIDTH - 8) - 20 - tw
+        if not kindL or nameRight > kindL then kindL = nameRight end
+        if not kindR or timeLeft < kindR then kindR = timeLeft end
         if Watched(r) then row.bell:Show() else row.bell:Hide() end
         if state == "docked" then
           row.icon:SetTexture(ICON_HERE)
@@ -636,9 +821,22 @@ local OB_OK, OB_ERR = pcall(function ()
         end
       end
     end
+    -- transport types in one column, centred between the longest place name and the
+    -- widest timer of all rows
+    if kindL and kindR then
+      local cx = math.floor((kindL + kindR) / 2 + 0.5)
+      for i = 1, n do
+        rows[i].kind:ClearAllPoints()
+        rows[i].kind:SetPoint("CENTER", rows[i], "LEFT", cx, 0)
+      end
+    end
     for i = n + 1, table.getn(rows) do rows[i]:Hide() end
     panel:SetHeight(TOP + n * ROW_H + 18)
-    panel.status:SetText(dllOk and "" or "no DLL: estimates only")
+    if recOn then
+      panel.status:SetText("|cffff4444REC|r " .. (type(DB.rec) == "table" and table.getn(DB.rec) or 0))
+    else
+      panel.status:SetText(dllOk and "" or "no DLL: estimates only")
+    end
     if cal then
       local d, t = CalCount()
       local inView = 0
@@ -671,13 +869,27 @@ local OB_OK, OB_ERR = pcall(function ()
   end
 
   -- Auto-show areas: Orgrimmar and Durotar (zone or sub-zone name), plus anything added with /ob allow.
+  -- Names are compared without capitals, quotes or outer spaces. The window also stays
+  -- open while a far route's transport (the Ratchet boat) is in view: on its dock and for
+  -- the whole crossing, which runs through zones that are not on the list.
+  local function Norm(n)
+    n = string.lower(n or "")
+    n = string.gsub(n, "[\"']", "")
+    n = string.gsub(n, "^%s+", "")
+    n = string.gsub(n, "%s+$", "")
+    return n
+  end
   local function InOrg()
     if not CFG.zoneOnly then return true end
-    local z = GetZoneText() or ""
-    local sz = GetSubZoneText() or ""
-    if z == "Orgrimmar" or sz == "Orgrimmar" or z == "Durotar" or sz == "Durotar" then return true end
+    local z = Norm(GetZoneText())
+    local sz = Norm(GetSubZoneText())
+    if z == "orgrimmar" or sz == "orgrimmar" or z == "durotar" or sz == "durotar" then return true end
     for i = 1, table.getn(CFG.allow) do
-      if z == CFG.allow[i] or sz == CFG.allow[i] then return true end
+      local a = Norm(CFG.allow[i])
+      if a ~= "" and (z == a or sz == a) then return true end
+    end
+    for i = 1, table.getn(ROUTES) do
+      if ROUTES[i].far and seenState[ROUTES[i].entry] then return true end
     end
     return false
   end
@@ -736,7 +948,18 @@ local OB_OK, OB_ERR = pcall(function ()
   local function RunAlerts()
         for i = 1, table.getn(ROUTES) do
       local r = ROUTES[i]
-      if Visible(r) then
+      if Visible(r) and r.far then
+        local fly = FlyBy(r)
+        if fly and Watched(r) and CFG.alert > 0 and fly <= CFG.alert then
+          local stamp = math.floor(EpochNow() + fly + 0.5)
+          if alerted[r.entry] ~= stamp then
+            alerted[r.entry] = stamp
+            if CFG.chat then Say(RouteName(r) .. ": fly to Ratchet in " .. FormatTime(fly) .. ".") end
+            if CFG.sound then PlaySound("RaidWarning") end
+            if CFG.flash then flashUntil = GetTime() + 8 end
+          end
+        end
+      elseif Visible(r) then
         local state, secs = Status(r)
         if state == "wait" and secs then
           if Watched(r) then
@@ -768,7 +991,7 @@ local OB_OK, OB_ERR = pcall(function ()
     EpochNow()
     if cal and (now - cal.t0) > 1500 then CalFinish(false) end
     pollT = pollT + arg1
-    if pollT >= (cal and 0.1 or 0.5) then
+    if pollT >= ((cal or recOn) and 0.1 or 0.5) then
       pollT = 0
       Poll()
     end
@@ -820,7 +1043,7 @@ local OB_OK, OB_ERR = pcall(function ()
       for i = 1, table.getn(ROUTES) do
         local r = ROUTES[i]
         local a, _, _, b = RowText(r)
-        Say(i .. ". " .. a .. "   " .. b .. "   (cycle " .. string.format("%.1f", Period(r)) .. "s)")
+        Say(i .. ". " .. a .. "   " .. b .. (Period(r) and ("   (cycle " .. string.format("%.1f", Period(r)) .. "s)") or ""))
       end
 
     elseif cmd == "alert" then
@@ -844,9 +1067,32 @@ local OB_OK, OB_ERR = pcall(function ()
       if nm == "" then
         Say("usage: /ob allow <zone or sub-zone name>   (see /ob where). Current extras: " .. table.concat(CFG.allow, ", "))
       else
-        table.insert(CFG.allow, nm)
-        Say("added \"" .. nm .. "\" to the places where the window opens by itself.")
+        nm = string.gsub(string.gsub(string.gsub(nm, "[\"']", ""), "^%s+", ""), "%s+$", "")
+        local dup = false
+        for i = 1, table.getn(CFG.allow) do
+          if Norm(CFG.allow[i]) == Norm(nm) then dup = true end
+        end
+        if dup then
+          Say("\"" .. nm .. "\" is already on the list.")
+        else
+          table.insert(CFG.allow, nm)
+          Say("added \"" .. nm .. "\" to the places where the window opens by itself.")
+        end
       end
+    elseif cmd == "disallow" then
+      local nm = ""
+      for i = 2, table.getn(w) do nm = nm .. (i > 2 and " " or "") .. w[i] end
+      local keep, gone = {}, 0
+      for i = 1, table.getn(CFG.allow) do
+        if Norm(CFG.allow[i]) == Norm(nm) then gone = gone + 1 else table.insert(keep, CFG.allow[i]) end
+      end
+      CFG.allow = keep
+      if gone > 0 then
+        Say("removed \"" .. nm .. "\". Still on the list: " .. (table.getn(keep) > 0 and table.concat(keep, ", ") or "nothing"))
+      else
+        Say("\"" .. nm .. "\" is not on the list. On the list: " .. (table.getn(keep) > 0 and table.concat(keep, ", ") or "nothing"))
+      end
+
     elseif cmd == "allowclear" then
       CFG.allow = {}
       Say("extra places cleared (Orgrimmar and Durotar remain).")
@@ -865,9 +1111,21 @@ local OB_OK, OB_ERR = pcall(function ()
     elseif cmd == "boat"  then
       CFG.hideBoat = not CFG.hideBoat
       Say("Sparkwater Port boat " .. (CFG.hideBoat and "hidden" or "shown") .. ".")
-    elseif cmd == "lock" then Toggle("window locked", "locked")
+    elseif cmd == "lock" then
+      Toggle("window locked", "locked")
+      if CFG.locked then grip:Hide() else grip:Show() end
+    elseif cmd == "scale" then
+      local v = tonumber(w[2])
+      if v then
+        ApplyScale(v)
+        Say("window scale " .. string.format("%.2f", CFG.scale) .. ".")
+      else
+        Say("usage: /ob scale <0.6 to 2>   (now " .. string.format("%.2f", CFG.scale or 1) .. "; or drag the dots in the bottom-right corner)")
+      end
     elseif cmd == "resetpos" then
       CFG.pos = nil
+      CFG.scale = nil
+      panel:SetScale(1)
       CFG.angle = nil
       PlaceButton()
       override = nil
@@ -881,9 +1139,9 @@ local OB_OK, OB_ERR = pcall(function ()
       for i = 3, table.getn(w) do text = text .. (i > 3 and " " or "") .. w[i] end
       if r and text ~= "" then
         DB.names[r.entry] = text
-        Say("route " .. w[2] .. " is now called: " .. text)
+        Say("route " .. w[2] .. " is now called: " .. RouteName(r))
       else
-        Say("usage: /ob name <number from /ob list> <new name>")
+        Say("usage: /ob name <number from /ob list> <new place name>   (the zeppelin / boat part stays)")
       end
 
     elseif cmd == "period" then
@@ -923,10 +1181,35 @@ local OB_OK, OB_ERR = pcall(function ()
       DB.dwell = {}
       DB.lastCal = nil
       DB.lastObs = {}
+      DB.pending = {}
       cal = nil
       confirmed = {}
       seenState = {}
       Say("learned data cleared; using built-in values until each zeppelin is seen again.")
+
+    elseif cmd == "travel" then
+      local s = tonumber(w[2])
+      if s and s >= 0 then
+        CFG.travel = s
+        Say("travel time from Orgrimmar to the Ratchet dock: " .. s .. "s.")
+      else
+        Say("usage: /ob travel <seconds>   (now " .. CFG.travel .. "s)")
+      end
+
+    elseif cmd == "debug" and (string.lower(w[2] or "") == "on" or string.lower(w[2] or "") == "off") then
+      if string.lower(w[2]) == "on" then
+        DB.rec = {}
+        recLast = {}
+        recZone, recTaxi = nil, nil
+        recOn = true
+        override = "show"
+        ApplyVisibility()
+        Say("recording every transport the DLL reports. /ob debug off to stop; log out or /reload to save it.")
+      else
+        recOn = false
+        local n = type(DB.rec) == "table" and table.getn(DB.rec) or 0
+        Say("recording stopped: " .. n .. " lines. Log out or /reload to write them to the saved file.")
+      end
 
     elseif cmd == "debug" then
       Say("DLL function present: " .. tostring(type(ZepTransports) == "function") ..
@@ -936,9 +1219,10 @@ local OB_OK, OB_ERR = pcall(function ()
         str = tostring(str)
         Say("raw (" .. string.len(str) .. " chars): " .. string.sub(str, 1, 180))
       end
+      if recOn then Say("recording: on, " .. table.getn(DB.rec) .. " lines so far.") end
 
     else
-      Say("/ob (window on/off)  |  list  |  alert <s>  |  sound|chat|flash|zone|boat|lock  |  where  |  shape <square|round|auto>  |  allow <name>  |  resetpos  |  name <n> <text>  |  period <n> <s>  |  calibrate  |  reset  |  debug")
+      Say("/ob (window on/off)  |  list  |  alert <s>  |  sound|chat|flash|zone|boat|lock  |  scale <n>  |  where  |  shape <square|round|auto>  |  allow|disallow <name>  |  resetpos  |  name <n> <text>  |  period <n> <s>  |  travel <s>  |  calibrate  |  reset  |  debug [on|off]")
     end
   end
 
