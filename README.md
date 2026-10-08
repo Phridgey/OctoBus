@@ -64,7 +64,7 @@ Each route runs on a fixed cycle. Once the addon sees one transport arrive, it c
 
 ### The Ratchet boat
 
-The Ratchet boat cannot be seen from Orgrimmar, so its row is always an estimate (`~`) built from the last time someone with the addon was at Ratchet. Its built-in timing was measured on two rides (cycle 364.07 s, 64 s at the dock). Every time you are at Ratchet with the boat in view, the timing is corrected and the cycle refined, so predictions stay accurate for longer the more visits it has seen.
+The Ratchet boat cannot be seen from Orgrimmar, so its row is always an estimate (`~`) built from the last time you saw it at Ratchet, or from the built-in timing if you never have. The built-in timing was measured on two rides (cycle 364.07 s, 64 s at the dock). Every time you are at Ratchet with the boat in view (the DLL is needed for this), your copy corrects its timing and refines the cycle, so predictions stay accurate for longer the more often you have been there. Nothing is shared between players: each copy only learns from what its own player sees.
 
 `fly` is the boat's departure from Ratchet minus your travel time from Orgrimmar to the dock. Set your own with `/ob travel <seconds>` (default 175: enough for a slower mount, with some time to spare; time your own trip from take-off at the Orgrimmar flight master to standing on the boat).
 
