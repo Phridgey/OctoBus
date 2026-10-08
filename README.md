@@ -25,13 +25,22 @@ Routes tracked (with built-in starting values, which refine themselves as you pl
 
 ## Install
 
-1. Copy the `TurtleTransit` folder to `Interface\AddOns\`.
-2. Copy `ZepSense.dll` to the game folder (next to `WoW.exe`).
-3. Add a line `ZepSense.dll` to `dlls.txt` in the game folder.
+Installing takes two parts. The addon can be installed by your launcher; the DLL always has to be set up by hand.
+
+### Part 1: the addon
+
+- **With a launcher:** add this repository's git address (`https://github.com/Phridgey/TurtleTransit.git`).
+- **By hand:** download this repository as a ZIP (green "Code" button, then "Download ZIP"), unzip it, rename the folder to `TurtleTransit` and put it in `Interface\AddOns\`. The folder must contain `TurtleTransit.toc` directly.
+
+### Part 2: the DLL (manual, the launcher does not do this)
+
+1. Download `ZepSense.dll` from the [Releases page](https://github.com/Phridgey/TurtleTransit/releases/latest).
+2. Put it in the game folder, next to `WoW.exe`.
+3. Open `dlls.txt` in the game folder and add a line `ZepSense.dll`.
 4. Start the game fully (a `/reload` is not enough the first time the DLL is added).
 5. Type `/tt debug`. It should say the DLL function is present and show raw transport data when transports are in range.
 
-The DLL only reads transport positions that the client has already loaded; it does not send anything anywhere. A prebuilt copy is in `dll/ZepSense.dll`; the source is `dll/ZepSense_v5.c` (built with `i686-w64-mingw32-gcc -O2 -shared -static-libgcc -Wl,--kill-at -s`). As with any client DLL, use it at your own risk and check your server's rules.
+The DLL only reads transport positions that the client has already loaded; it does not send anything anywhere. Its source is `ZepSense_src/ZepSense_v5.c` (built with `i686-w64-mingw32-gcc -O2 -shared -static-libgcc -Wl,--kill-at -s`). As with any client DLL, use it at your own risk and check your server's rules.
 
 Saved data lives in `WTF\...\SavedVariables\TurtleTransitDB.lua`.
 
