@@ -4,7 +4,7 @@ Arrival timers for the zeppelins at the Orgrimmar towers, plus the Sparkwater Po
 
 A small minimap icon opens a window listing every transport with a live timer: how long until it **leaves** if it is docked, or how long until it **docks** if it is away. Click a transport to put a bell on it and get a chat message shortly before it arrives.
 
-OctoBus is a standalone addon. It does not need pfUI or any other addon.
+OctoBus needs one extra file, `ZepSense.dll`, which you install by hand in the game folder. Your launcher can install the addon but not the DLL. See [Install](#install).
 
 ## What you see
 
