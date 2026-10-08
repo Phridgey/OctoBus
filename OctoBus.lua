@@ -108,7 +108,7 @@ local OB_OK, OB_ERR = pcall(function ()
       c.allow = c.allow or {}
       if c.hideBoat == nil then c.hideBoat = false end
       if c.locked == nil then c.locked = false end
-      if c.travel == nil then c.travel = 150 end
+      if c.travel == nil then c.travel = 175 end
       t.pending = t.pending or {}
       if c.ver ~= 2 then   -- v2: alerts are opt-in per route (bell) and chat-only by default
         c.ver = 2
