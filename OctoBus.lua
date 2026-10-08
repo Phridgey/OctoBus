@@ -1,6 +1,6 @@
 --[[
-  TurtleTransit
-  -------------
+  OctoBus
+  -------
   Arrival timers for the zeppelins at the Orgrimmar towers (plus the Sparkwater Port boat).
   A small icon on the minimap edge shows / hides a timer window; the window opens by itself
   in Orgrimmar and Durotar.
@@ -18,35 +18,35 @@
 
   Click a row to put a bell on it: you then get a chat message before that transport arrives.
 
-  SLASH COMMANDS  (/tt, also /transit and /zep)
-    /tt                     show / hide the window (works anywhere)
-    /tt list                print all timers in chat
-    /tt alert <sec>         bell alerts fire this many seconds before arrival (default 45)
-    /tt sound|chat|flash    toggle that alert type
-    /tt zone                toggle "auto-show only in Orgrimmar / Durotar"
-    /tt boat                show / hide the Sparkwater Port boat
-    /tt shape square|round|auto   minimap icon placement (auto looks at your minimap)
-    /tt where               print your zone / sub-zone and whether the window auto-shows
-    /tt allow <name>        also auto-show in this zone or sub-zone
-    /tt name <n> <text>     rename route number n (from /tt list)
-    /tt period <n> <sec>    set a route's cycle length by hand
-    /tt calibrate           optional: watch every transport on purpose (stand between the towers).
+  SLASH COMMANDS  (/ob, also /transit and /zep)
+    /ob                     show / hide the window (works anywhere)
+    /ob list                print all timers in chat
+    /ob alert <sec>         bell alerts fire this many seconds before arrival (default 45)
+    /ob sound|chat|flash    toggle that alert type
+    /ob zone                toggle "auto-show only in Orgrimmar / Durotar"
+    /ob boat                show / hide the Sparkwater Port boat
+    /ob shape square|round|auto   minimap icon placement (auto looks at your minimap)
+    /ob where               print your zone / sub-zone and whether the window auto-shows
+    /ob allow <name>        also auto-show in this zone or sub-zone
+    /ob name <n> <text>     rename route number n (from /ob list)
+    /ob period <n> <sec>    set a route's cycle length by hand
+    /ob calibrate           optional: watch every transport on purpose (stand between the towers).
                             Not required: any arrival you see near the towers calibrates automatically.
-    /tt reset               forget everything learned (back to built-in values)
-    /tt debug               show what the DLL is returning
+    /ob reset               forget everything learned (back to built-in values)
+    /ob debug               show what the DLL is returning
 ]]
 
--- Stage 1: runs as soon as this file loads, so /tt always answers, even if the real
--- start-up below fails. If it fails, /tt prints the error message.
-local TT_STAGE = "file loaded, start-up not finished"
-SLASH_TURTLETRANSIT1 = "/tt"
-SLASH_TURTLETRANSIT2 = "/transit"
-SLASH_TURTLETRANSIT3 = "/zep"
-SlashCmdList["TURTLETRANSIT"] = function(msg)
-  DEFAULT_CHAT_FRAME:AddMessage("|cff33ffccTurtleTransit:|r not running. " .. tostring(TT_STAGE))
+-- Stage 1: runs as soon as this file loads, so /ob always answers, even if the real
+-- start-up below fails. If it fails, /ob prints the error message.
+local OB_STAGE = "file loaded, start-up not finished"
+SLASH_OCTOBUS1 = "/ob"
+SLASH_OCTOBUS2 = "/transit"
+SLASH_OCTOBUS3 = "/zep"
+SlashCmdList["OCTOBUS"] = function(msg)
+  DEFAULT_CHAT_FRAME:AddMessage("|cff33ffccOctoBus:|r not running. " .. tostring(OB_STAGE))
 end
 
-local TT_OK, TT_ERR = pcall(function ()
+local OB_OK, OB_ERR = pcall(function ()
 
   local gfind = string.gmatch or string.gfind
 
@@ -73,10 +73,10 @@ local TT_OK, TT_ERR = pcall(function ()
   local G = getfenv(0)
   local dbRef = nil
   local function Ensure()
-    local t = G.TurtleTransitDB
+    local t = G.OctoBusDB
     if type(t) ~= "table" then
       t = {}
-      G.TurtleTransitDB = t
+      G.OctoBusDB = t
     end
     if t ~= dbRef then
       dbRef = t
@@ -117,7 +117,7 @@ local TT_OK, TT_ERR = pcall(function ()
   Ensure()
 
   local function Say(msg)
-    DEFAULT_CHAT_FRAME:AddMessage("|cff33ffccTurtleTransit:|r " .. msg)
+    DEFAULT_CHAT_FRAME:AddMessage("|cff33ffccOctoBus:|r " .. msg)
   end
 
   local function FormatTime(s)
@@ -162,7 +162,7 @@ local TT_OK, TT_ERR = pcall(function ()
   end
 
   ------------------------------------------------------------------------
-  -- Calibration. /tt calibrate: stay somewhere you can see the docks (between the two
+  -- Calibration. /ob calibrate: stay somewhere you can see the docks (between the two
   -- towers). Every route needs one fresh arrival (two the very first time, because a
   -- cycle length needs two arrivals to measure). Each new arrival is compared with the
   -- oldest trusted one (the "origin"): the gap divided by the whole number of cycles in
@@ -171,7 +171,7 @@ local TT_OK, TT_ERR = pcall(function ()
   local cal = nil        -- nil = not calibrating
 
   -- Every arrival that refines a cycle length counts as a calibration for that route,
-  -- whether you ran /tt calibrate or just walked past the towers.
+  -- whether you ran /ob calibrate or just walked past the towers.
   local function FormatSpan(sec)
     if sec < 3600 then return string.format("%d min", math.floor(sec / 60 + 0.5)) end
     if sec < 86400 then return string.format("%.0f h", sec / 3600) end
@@ -403,7 +403,7 @@ local TT_OK, TT_ERR = pcall(function ()
   local ICON_AWAY = "Interface\\Buttons\\UI-GroupLoot-Pass-Up"
 
   -- minimap icon: click = show / hide the window, drag = move it around the minimap edge
-  local btn = CreateFrame("Button", "TurtleTransitButton", Minimap)
+  local btn = CreateFrame("Button", "OctoBusButton", Minimap)
   btn:SetFrameStrata("MEDIUM")
   btn:SetFrameLevel(Minimap:GetFrameLevel() + 8)
   btn:SetWidth(31)
@@ -457,7 +457,7 @@ local TT_OK, TT_ERR = pcall(function ()
   local ROW_H = 18
   local TOP = 22
 
-  local panel = CreateFrame("Frame", "TurtleTransitPanel", UIParent)
+  local panel = CreateFrame("Frame", "OctoBusPanel", UIParent)
   panel:SetFrameStrata("MEDIUM")
   panel:SetWidth(WIDTH)
   panel:SetHeight(100)
@@ -670,7 +670,7 @@ local TT_OK, TT_ERR = pcall(function ()
     end
   end
 
-  -- Auto-show areas: Orgrimmar and Durotar (zone or sub-zone name), plus anything added with /tt allow.
+  -- Auto-show areas: Orgrimmar and Durotar (zone or sub-zone name), plus anything added with /ob allow.
   local function InOrg()
     if not CFG.zoneOnly then return true end
     local z = GetZoneText() or ""
@@ -808,7 +808,7 @@ local TT_OK, TT_ERR = pcall(function ()
     return nil
   end
 
-  SlashCmdList["TURTLETRANSIT"] = function(msg)
+  SlashCmdList["OCTOBUS"] = function(msg)
     msg = msg or ""
     local w = Words(msg)
     local cmd = string.lower(w[1] or "")
@@ -829,7 +829,7 @@ local TT_OK, TT_ERR = pcall(function ()
         CFG.alert = s
         Say("alerts " .. (s == 0 and "off" or (s .. " seconds before arrival")) .. ".")
       else
-        Say("usage: /tt alert <seconds>   (0 = off)")
+        Say("usage: /ob alert <seconds>   (0 = off)")
       end
 
     elseif cmd == "sound" then Toggle("sound alert", "sound")
@@ -842,7 +842,7 @@ local TT_OK, TT_ERR = pcall(function ()
       local nm = ""
       for i = 2, table.getn(w) do nm = nm .. (i > 2 and " " or "") .. w[i] end
       if nm == "" then
-        Say("usage: /tt allow <zone or sub-zone name>   (see /tt where). Current extras: " .. table.concat(CFG.allow, ", "))
+        Say("usage: /ob allow <zone or sub-zone name>   (see /ob where). Current extras: " .. table.concat(CFG.allow, ", "))
       else
         table.insert(CFG.allow, nm)
         Say("added \"" .. nm .. "\" to the places where the window opens by itself.")
@@ -857,7 +857,7 @@ local TT_OK, TT_ERR = pcall(function ()
       elseif v == "auto" then
         CFG.shape = nil
       else
-        Say("usage: /tt shape square|round|auto   (now: " .. (CFG.shape or "auto") .. ", looks " .. (MinimapIsSquare() and "square" or "round") .. ")")
+        Say("usage: /ob shape square|round|auto   (now: " .. (CFG.shape or "auto") .. ", looks " .. (MinimapIsSquare() and "square" or "round") .. ")")
         return
       end
       PlaceButton()
@@ -883,7 +883,7 @@ local TT_OK, TT_ERR = pcall(function ()
         DB.names[r.entry] = text
         Say("route " .. w[2] .. " is now called: " .. text)
       else
-        Say("usage: /tt name <number from /tt list> <new name>")
+        Say("usage: /ob name <number from /ob list> <new name>")
       end
 
     elseif cmd == "period" then
@@ -893,20 +893,20 @@ local TT_OK, TT_ERR = pcall(function ()
         DB.period[r.entry] = s
         Say(RouteName(r) .. ": cycle set to " .. s .. "s.")
       else
-        Say("usage: /tt period <number from /tt list> <seconds>")
+        Say("usage: /ob period <number from /ob list> <seconds>")
       end
 
     elseif cmd == "calibrate" or cmd == "cal" then
       if w[2] == "stop" or w[2] == "cancel" then
         if cal then CalFinish(false) else Say("not calibrating.") end
       elseif not dllOk then
-        Say("calibration needs ZepSense.dll answering (see /tt debug).")
+        Say("calibration needs ZepSense.dll answering (see /ob debug).")
       else
         local n = CalStart()
         override = "show"
         ApplyVisibility()
         Say("calibrating " .. n .. " transports. Stand where you can see the docks (between the two towers), do not /reload, and wait.")
-        Say("each transport needs " .. "1 fresh arrival (2 the first time). Rows turn + when done. /tt calibrate stop cancels.")
+        Say("each transport needs " .. "1 fresh arrival (2 the first time). Rows turn + when done. /ob calibrate stop cancels.")
         local seen = 0
         for i = 1, table.getn(ROUTES) do
           if seenState[ROUTES[i].entry] then seen = seen + 1 end
@@ -938,12 +938,12 @@ local TT_OK, TT_ERR = pcall(function ()
       end
 
     else
-      Say("/tt (window on/off)  |  list  |  alert <s>  |  sound|chat|flash|zone|boat|lock  |  where  |  shape <square|round|auto>  |  allow <name>  |  resetpos  |  name <n> <text>  |  period <n> <s>  |  calibrate  |  reset  |  debug")
+      Say("/ob (window on/off)  |  list  |  alert <s>  |  sound|chat|flash|zone|boat|lock  |  where  |  shape <square|round|auto>  |  allow <name>  |  resetpos  |  name <n> <text>  |  period <n> <s>  |  calibrate  |  reset  |  debug")
     end
   end
 
 end)
-if not TT_OK then
-  TT_STAGE = "start-up error: " .. tostring(TT_ERR)
-  DEFAULT_CHAT_FRAME:AddMessage("|cff33ffccTurtleTransit:|r |cffff5555" .. TT_STAGE .. "|r")
+if not OB_OK then
+  OB_STAGE = "start-up error: " .. tostring(OB_ERR)
+  DEFAULT_CHAT_FRAME:AddMessage("|cff33ffccOctoBus:|r |cffff5555" .. OB_STAGE .. "|r")
 end
