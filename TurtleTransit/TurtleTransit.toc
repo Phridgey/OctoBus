@@ -1,0 +1,8 @@
+## Interface: 11200
+## Title: |cff33ffccTurtle|rTransit
+## Notes: Zeppelin and boat arrival timers for Orgrimmar. Reads live positions from ZepSense.dll; minimap icon toggles the window.
+## Author: You
+## Version: 1.0
+## SavedVariables: TurtleTransitDB
+
+TurtleTransit.lua
