@@ -40,7 +40,7 @@ Installing takes two parts. The addon can be installed by your launcher; the DLL
 2. Put it in the game folder, next to `WoW.exe`.
 3. Open `dlls.txt` in the game folder and add a line `ZepSense.dll`.
 4. Start the game fully (a `/reload` is not enough the first time the DLL is added).
-5. Type `/ob debug`. It should say the DLL function is present and show raw transport data when transports are in range.
+5. Check it worked: open the window (`/ob` or the minimap icon). If the top-right corner says **"no DLL: estimates only"**, the DLL is not loaded (see [Troubleshooting](#troubleshooting)). If that note is absent, everything is working. There is nothing else to set up: the timers correct themselves each time you see a transport dock.
 
 The DLL only reads transport positions that the client has already loaded; it does not send anything anywhere. Its source is `ZepSense_src/ZepSense_v5.c` (built with `i686-w64-mingw32-gcc -O2 -shared -static-libgcc -Wl,--kill-at -s`). As with any client DLL, use it at your own risk and check your server's rules.
 
@@ -93,8 +93,8 @@ The Ratchet boat cannot be seen from Orgrimmar, so its row is always an estimate
 | `/ob period <n> <sec>` | Set a route's cycle length by hand |
 | `/ob calibrate` | Watch all transports on purpose (see above); `/ob calibrate stop` cancels |
 | `/ob reset` | Forget everything learned and go back to built-in values |
-| `/ob debug` | Show whether the DLL is answering and the raw data it returns |
-| `/ob debug on` / `off` | Record every transport the DLL reports (with your zone and flight times) to the saved file, for working out new routes. `REC` shows in the window while it runs; `/reload` or log out to write it. |
+| `/ob debug` | Print once whether the DLL is answering and the raw data it returns (prints only, records nothing) |
+| `/ob debug on` / `off` | For working out new routes only; not needed in normal use. Records every transport the DLL reports to the saved file, which grows quickly, so always turn it off again. `REC` shows in the window while it runs. |
 
 ## Troubleshooting
 
