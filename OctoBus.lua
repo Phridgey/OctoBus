@@ -1,9 +1,11 @@
 --[[
   OctoBus
   -------
-  Arrival timers for the zeppelins at the Orgrimmar towers (plus the Sparkwater Port boat).
-  A small icon on the minimap edge shows / hides a timer window; the window opens by itself
-  in Orgrimmar and Durotar.
+  Arrival timers for the Horde zeppelins and boats: Orgrimmar to Undercity, Grom'gol, Kargath
+  and Thunder Bluff, Grom'gol to Undercity, Sparkwater to Revantusk, and Ratchet to Booty Bay.
+  Each row reads "start -> end" and times the transport at the start; right-click reverses
+  it. The window shows the routes for where you are (click its title for all of them) and
+  opens by itself at either end of any route. A small minimap icon shows / hides it.
 
   HOW IT WORKS
   Needs ZepSense.dll (listed in dlls.txt). The DLL adds one function to the client,
@@ -23,14 +25,15 @@
     /ob list                print all timers in chat
     /ob alert <sec>         bell alerts fire this many seconds before arrival (default 45)
     /ob sound|chat|flash    toggle that alert type
-    /ob zone                toggle "auto-show only in Orgrimmar / Durotar"
+    /ob zone                toggle "auto-show only at route ends" (off = always show)
+    /ob all                 all routes / only routes for where you are (or click the title)
     /ob boat                show / hide the Sparkwater Port boat
     /ob scale <n>           window size, 0.6 to 2 (or drag the dots in the bottom-right corner)
     /ob shape square|round|auto   minimap icon placement (auto looks at your minimap)
     /ob where               print your zone / sub-zone and whether the window auto-shows
     /ob allow <name>        also auto-show in this zone or sub-zone
     /ob disallow <name>     take a place off that list
-    /ob name <n> <text>     rename route number n (from /ob list)
+    /ob name <n> <text>     rename the far end of route number n (from /ob list)
     /ob period <n> <sec>    set a route's cycle length by hand
     /ob calibrate           optional: watch every transport on purpose (stand between the towers).
                             Not required: any arrival you see near the towers calibrates automatically.
@@ -59,20 +62,55 @@ local OB_OK, OB_ERR = pcall(function ()
   -- period/anchor are starting values measured from a 25 minute log; anchor is the
   -- time() of one observed arrival. Real observations replace them automatically.
   ------------------------------------------------------------------------
+  -- Zones (or sub-zones) of each end, for the "where you are" view: homeZ = the home end,
+  -- awayZ = the far end, planZ = places where the route is shown for planning (Ratchet from
+  -- Orgrimmar, as "fly").
+  local ORG = { "Orgrimmar", "Durotar" }
   local ROUTES = {
-    { entry = 164871, name = "Undercity", kind = "zeppelin", x = 1318.1, y = -4658.0, period = 356.3, dwell = 63, anchor = 1791422404 },
-    { entry = 175080, name = "Grom'gol", kind = "zeppelin", x = 1360.8, y = -4631.3, period = 303.5, dwell = 63, anchor = 1791422441 },
-    { entry = 190552, name = "Kargath", kind = "zeppelin", x = 1206.1, y = -4158.7, period = 374.0, dwell = 63, anchor = 1791422484 },
-    { entry = 190549, name = "Thunder Bluff", kind = "zeppelin", x = 1125.4, y = -4135.0, period = 567.0, dwell = 63, anchor = 1791422131 },
-    { entry = 190550, name = "Sparkwater", kind = "boat", x = 876.1,  y = -5204.1, period = 244.75, dwell = 43, anchor = 1791422323, boat = true },
+    -- Built-in starting values from Phridgey's sightings on 8 Oct 2026: cycle measured over
+    -- ~5 h (origin = first sighting, anchor = latest), stay at the dock, and where measured
+    -- on a ride, the far end (flipOffset = seconds after docking here that it docks there).
+    -- A new copy refines all of this from its own sightings.
+    { entry = 164871, homeZ = ORG, awayZ = { "Tirisfal Glades", "Undercity" },
+      name = "Undercity", kind = "zeppelin", x = 1318.1, y = -4658.0,
+      period = 356.286, dwell = 64.0, origin = 1791471571.34, anchor = 1791489385.64,
+      flipFrom = "Undercity", flipTo = "Orgrimmar", flipOffset = 191.1, flipDwell = 64.0 },
+    { entry = 175080, homeZ = ORG, awayZ = { "Stranglethorn Vale" },
+      name = "Grom'gol", kind = "zeppelin", x = 1360.8, y = -4631.3,
+      period = 303.458, dwell = 64.1, origin = 1791471600.26, anchor = 1791489504.28,
+      flipFrom = "Grom'gol", flipTo = "Orgrimmar", flipOffset = 138.2, flipDwell = 64.1 },
+    { entry = 190552, homeZ = ORG, awayZ = { "Badlands" },
+      name = "Kargath", kind = "zeppelin", x = 1206.1, y = -4158.7,
+      period = 374.073, dwell = 63.9, origin = 1791471857.57, anchor = 1791489438.99,
+      flipFrom = "Kargath", flipTo = "Orgrimmar", flipOffset = 198.0, flipDwell = 64.2 },
+    { entry = 190549, homeZ = ORG, awayZ = { "Mulgore", "Thunder Bluff" },
+      name = "Thunder Bluff", kind = "zeppelin", x = 1125.4, y = -4135.0,
+      period = 566.785, dwell = 64.2, origin = 1791472003.14, anchor = 1791490140.28,
+      flipFrom = "Thunder Bluff", flipTo = "Orgrimmar", flipOffset = 275.8, flipDwell = 64.0 },
+    { entry = 190550, homeZ = ORG, awayZ = { "The Hinterlands" },
+      name = "Sparkwater", kind = "boat", x = 876.1, y = -5204.1, boat = true,
+      period = 245.030, dwell = 44.1, origin = 1791471573.69, anchor = 1791489460.91,
+      flipFrom = "Revantusk", flipTo = "Sparkwater", flipOffset = 123.2, flipDwell = 44.0 },
+    -- Grom'gol <-> Undercity zeppelin, timed at the Grom'gol dock (the only end measured).
+    -- Seen leaving Grom'gol 1791480459.89 and arriving 1791486390.25: 18 cycles of 333.02 s
+    -- (assuming the usual 64 s stay); an earlier glimpse docked fits too. The Undercity end
+    -- is learned on the first ride from Grom'gol.
+    { entry = 176495, homeZ = { "Stranglethorn Vale" }, awayZ = { "Tirisfal Glades", "Undercity" },
+      name = "Undercity", kind = "zeppelin", x = -12406.9, y = 211.8,
+      period = 333.02, dwell = 64.0, origin = 1791480395.89, anchor = 1791486390.25,
+      flipFrom = "Undercity", flipTo = "Grom'gol" },
     -- Ratchet -> Booty Bay boat, timed at the Ratchet dock. Never visible from Orgrimmar, so
-    -- the row shows when to fly out ("fly") rather than when it docks. Measured on two rides
-    -- (8 Oct 2026): Ratchet arrivals 1791479926.67 and 1791480654.81 are 2 cycles apart
-    -- (364.07 s; legs 64 s dock + 114.8 s crossing + 64.2 s Booty Bay + 121.1 s back).
-    -- origin seeds the baseline so later arrivals keep refining the cycle.
-    { entry = 20808, name = "Ratchet", kind = "boat", x = -1005.6, y = -3841.6, period = 364.07,
-      dwell = 64, anchor = 1791480654.81, origin = 1791479926.67, far = true },
+    -- the row shows when to fly out ("fly") rather than when it docks. Ratchet arrivals
+    -- 1791479926.67 .. 1791490117.34 are 28 cycles apart (363.95 s). Booty Bay end seen on
+    -- two days' rides: docks 178.6 s after Ratchet, stays 64.2 s.
+    { entry = 20808, homeZ = { "Ratchet" }, awayZ = { "Stranglethorn Vale" }, planZ = ORG,
+      name = "Ratchet", kind = "boat", x = -1005.6, y = -3841.6, far = true,
+      period = 363.952, dwell = 63.7, origin = 1791479926.67, anchor = 1791490117.34,
+      flipFrom = "Booty Bay", flipTo = "Ratchet", flipOffset = 178.6, flipDwell = 64.2 },
   }
+
+  -- Right-click on a row reverses it: times for the far end (flipFrom, going to flipTo). Where the other end was never measured (flipOffset unset), it is assumed to
+  -- dock halfway through the cycle and to stay as long as at this end: a rough estimate.
   local DOCK_RADIUS = 2.0
 
   ------------------------------------------------------------------------
@@ -98,6 +136,9 @@ local OB_OK, OB_ERR = pcall(function ()
       t.origin = t.origin or {}
       t.dwell = t.dwell or {}
       t.lastObs = t.lastObs or {}
+      t.flip = t.flip or {}
+      t.farOff = t.farOff or {}
+      t.farDwell = t.farDwell or {}
       t.cfg = t.cfg or {}
       local c = t.cfg
       if c.alert == nil then c.alert = 45 end
@@ -139,14 +180,66 @@ local OB_OK, OB_ERR = pcall(function ()
     return string.format("%d:%02d", math.floor(s / 60), math.mod(s, 60))
   end
 
-  -- "<place> <kind>": the place can be renamed with /ob name; in the window the kind is
-  -- shown in the same grey as the "docks" / "leaves" labels.
-  local function RouteName(r) return (DB.names[r.entry] or r.name) .. " " .. r.kind end
-  local function RowName(r) return (DB.names[r.entry] or r.name) .. " |cffaaaaaa" .. r.kind .. "|r" end
+  -- Rows read "start -> end". flipTo is the home end (Orgrimmar, Sparkwater, Ratchet),
+  -- flipFrom the far end; /ob name renames the far end.
+  local function Away(r) return DB.names[r.entry] or r.flipFrom end
+  local function RouteName(r) return r.flipTo .. " -> " .. Away(r) end
   local function Period(r)    return DB.period[r.entry] or r.period end
   local function Anchor(r)    return DB.anchor[r.entry] or r.anchor end
   local function Watched(r)   return DB.bell[r.entry] == true end
-  local function Visible(r)   return (not r.boat) or (not CFG.hideBoat) end
+  -- Names are compared without capitals, quotes or outer spaces.
+  local function Norm(n)
+    n = string.lower(n or "")
+    n = string.gsub(n, "[\"']", "")
+    n = string.gsub(n, "^%s+", "")
+    n = string.gsub(n, "%s+$", "")
+    return n
+  end
+
+  local seenState = {}   -- entry -> { atDock = bool, arrivedAt = epoch or nil }
+
+  -- Where the player is. LOC.z / LOC.sz = current zone / sub-zone; LOC.mz / LOC.msz = the
+  -- place the "where you are" view is built for: the current one, or the last place that
+  -- had routes (CFG.hub) when you are somewhere without any.
+  local LOC = { z = "", sz = "", mz = "", msz = "", key = nil }
+  local manualFlip = {}  -- right-clicks in the "where you are" view; cleared on zone change
+  local function InListAt(t, z, sz)
+    if not t then return false end
+    for i = 1, table.getn(t) do
+      local a = Norm(t[i])
+      if a == z or a == sz then return true end
+    end
+    return false
+  end
+  local function AtHome(r) return InListAt(r.homeZ, LOC.mz, LOC.msz) end
+  local function AtAway(r) return InListAt(r.awayZ, LOC.mz, LOC.msz) end
+  local function AtPlan(r) return InListAt(r.planZ, LOC.mz, LOC.msz) end
+  local function UpdateLoc()
+    local z, sz = Norm(GetZoneText()), Norm(GetSubZoneText())
+    if z ~= LOC.key then LOC.key = z; manualFlip = {} end
+    LOC.z, LOC.sz = z, sz
+    local any = false
+    for i = 1, table.getn(ROUTES) do
+      local r = ROUTES[i]
+      if InListAt(r.homeZ, z, sz) or InListAt(r.awayZ, z, sz) or InListAt(r.planZ, z, sz) then any = true end
+    end
+    if any then
+      LOC.mz, LOC.msz = z, sz
+      CFG.hub = { z = z, sz = sz }
+    elseif CFG.hub then
+      LOC.mz, LOC.msz = CFG.hub.z, CFG.hub.sz
+    else
+      LOC.mz, LOC.msz = z, sz
+    end
+  end
+
+  -- Shown rows: "all routes" (CFG.full) or only the ones for where you are (either end,
+  -- a planning place, or the transport in view, e.g. while riding it).
+  local function Visible(r)
+    if r.boat and CFG.hideBoat then return false end
+    if CFG.full then return true end
+    return AtHome(r) or AtAway(r) or AtPlan(r) or seenState[r.entry] ~= nil
+  end
 
   -- confirmed[entry] = true once the transport has been SEEN docking/leaving this session
   local confirmed = {}
@@ -166,13 +259,38 @@ local OB_OK, OB_ERR = pcall(function ()
   local function Dwell(r) return DB.dwell[r.entry] or r.dwell end
 
   -- returns "docked", secondsUntilDeparture   or   "wait", secondsUntilArrival
-  local function Predict(r)
+  -- Reversed? "All routes": as set with right-click (kept). "Where you are": starts from
+  -- your end automatically; a right-click reverses it until you change zone.
+  local function Flipped(r)
+    if not r.flipFrom then return false end
+    if CFG.full then return DB.flip[r.entry] == true end
+    local auto = AtAway(r) and not AtHome(r) and not AtPlan(r)
+    if manualFlip[r.entry] then return not auto end
+    return auto
+  end
+  local function FlipName(r) return Away(r) .. " -> " .. r.flipTo end
+  local function ShownName(r) if Flipped(r) then return FlipName(r) end return RouteName(r) end
+  local function StartName(r) if Flipped(r) then return Away(r) end return r.flipTo end
+  local RowName = ShownName
+
+  -- Far end timing: learned on a ride (DB.farOff / DB.farDwell), else built in, else the
+  -- rough "halfway through the cycle, same stay" assumption. FarKnown = not a guess.
+  local function FarKnown(r) return (DB.farOff[r.entry] or r.flipOffset) ~= nil end
+  local function FarOff(r, P) return DB.farOff[r.entry] or r.flipOffset or P / 2 end
+  local function FarDwell(r) return DB.farDwell[r.entry] or r.flipDwell or Dwell(r) end
+
+  -- otherEnd = true: the same schedule seen from the far end of the route
+  local function Predict(r, otherEnd)
     local a, P = Anchor(r), Period(r)
     if not a or not P or P <= 0 then return nil end
+    local d = Dwell(r)
+    if otherEnd then
+      a = a + FarOff(r, P)
+      d = FarDwell(r)
+    end
     local e = EpochNow() - a
     local ph = math.mod(e, P)
     if ph < 0 then ph = ph + P end
-    local d = Dwell(r)
     if ph < d then return "docked", d - ph end
     return "wait", P - ph
   end
@@ -278,7 +396,6 @@ local OB_OK, OB_ERR = pcall(function ()
   ------------------------------------------------------------------------
   -- Watching the DLL
   ------------------------------------------------------------------------
-  local seenState = {}   -- entry -> { atDock = bool, arrivedAt = epoch or nil }
   local dllOk = false
   local lastGood = 0
 
@@ -344,6 +461,7 @@ local OB_OK, OB_ERR = pcall(function ()
       end
     else
       -- never saw it arrive, but it leaves 'dwell' seconds after arriving
+      if not DB.origin[e] and r.origin then DB.origin[e] = r.origin end
       DB.anchor[e] = t - Dwell(r)
       if not DB.origin[e] then
         DB.origin[e] = t - Dwell(r)
@@ -392,6 +510,66 @@ local OB_OK, OB_ERR = pcall(function ()
     end
   end
 
+  ------------------------------------------------------------------------
+  -- Far-end learning. A tracked transport that stands still for 20 s somewhere other than
+  -- its home dock is docked at the far end. Its arrival there (when it first came within
+  -- DOCK_RADIUS of where it stopped) is stored as seconds into the cycle, and its stay is
+  -- stored when it leaves. Only learned when the home-end schedule was confirmed this
+  -- session, so the offset is measured against a fresh schedule. Nothing is printed.
+  ------------------------------------------------------------------------
+  local FAR_STILL = 20
+  local farW = {}        -- entry -> { hist = {{t,x,y}...}, sx, sy, st, arr }
+  local function FarWatch(r, now, x, y, atDock)
+    local e = r.entry
+    if not r.flipFrom or atDock or (x == 0 and y == 0) then farW[e] = nil; return end
+    local w = farW[e]
+    if not w then w = { hist = {} }; farW[e] = w end
+    -- keep only samples where it moved, so the approach is still in the history after
+    -- 20 s standing still (polling is 10 per second while recording)
+    local hn = table.getn(w.hist)
+    local last = w.hist[hn]
+    if not last or math.abs(last[2] - x) >= 0.05 or math.abs(last[3] - y) >= 0.05 then
+      table.insert(w.hist, { now, x, y })
+      if hn + 1 > 120 then table.remove(w.hist, 1) end
+    end
+    if w.sx and math.abs(x - w.sx) < 0.3 and math.abs(y - w.sy) < 0.3 then
+      if not w.arr and (now - w.st) >= FAR_STILL then
+        -- docked: arrival = first recent sample within DOCK_RADIUS of the stop point
+        local arr, approached = w.st, false
+        for i = table.getn(w.hist), 1, -1 do
+          local h = w.hist[i]
+          local dx, dy = h[2] - w.sx, h[3] - w.sy
+          if math.sqrt(dx * dx + dy * dy) > DOCK_RADIUS then approached = true; break end
+          arr = h[1]
+        end
+        w.arr = arr
+        local P = Period(r)
+        -- only when it was seen coming in (not already docked when it came into view)
+        if approached and confirmed[e] and P and P > 0 then
+          local off = math.mod(arr - Anchor(r), P)
+          if off < 0 then off = off + P end
+          local old = DB.farOff[e]
+          if old and math.abs(old - off) < 20 then off = old * 0.5 + off * 0.5 end
+          DB.farOff[e] = off
+          w.learn = true
+        end
+      end
+      return
+    end
+    if w.arr and w.sx then
+      local dx, dy = x - w.sx, y - w.sy
+      if math.sqrt(dx * dx + dy * dy) <= DOCK_RADIUS then return end   -- still easing out
+      local d = now - w.arr
+      if w.learn and d > 20 and d < 150 then
+        local old = DB.farDwell[e]
+        DB.farDwell[e] = old and (old * 0.6 + d * 0.4) or d
+      end
+      w.arr = nil
+      w.learn = nil
+    end
+    w.sx, w.sy, w.st = x, y, now
+  end
+
   local function Poll()
     if type(ZepTransports) ~= "function" then dllOk = false; return end
     local ok, str = pcall(ZepTransports)
@@ -414,6 +592,7 @@ local OB_OK, OB_ERR = pcall(function ()
             present[de] = true
             local dx, dy = x - r.x, y - r.y
             local atDock = (math.sqrt(dx * dx + dy * dy) <= DOCK_RADIUS)
+            FarWatch(r, now, x, y, atDock)
             local st = seenState[de]
             if not st then
               seenState[de] = { atDock = atDock }
@@ -437,6 +616,7 @@ local OB_OK, OB_ERR = pcall(function ()
     for i = 1, table.getn(ROUTES) do
       local e = ROUTES[i].entry
       if seenState[e] and not present[e] then seenState[e] = nil end
+      if not present[e] then farW[e] = nil end
     end
   end
 
@@ -567,6 +747,24 @@ local OB_OK, OB_ERR = pcall(function ()
   panel:SetScript("OnDragStart", StartDrag)
   panel:SetScript("OnDragStop", StopDrag)
 
+  -- click the title: switch between all routes and routes for where you are
+  local titleBtn = CreateFrame("Button", nil, panel)
+  titleBtn:SetPoint("TOPLEFT", panel, "TOPLEFT", 4, -2)
+  titleBtn:SetWidth(150)
+  titleBtn:SetHeight(16)
+  titleBtn:RegisterForClicks("LeftButtonUp")
+  titleBtn:RegisterForDrag("LeftButton")
+  titleBtn:SetScript("OnDragStart", StartDrag)
+  titleBtn:SetScript("OnDragStop", StopDrag)
+  titleBtn:SetScript("OnClick", function() CFG.full = not CFG.full end)
+  titleBtn:SetScript("OnEnter", function()
+    GameTooltip:SetOwner(this, "ANCHOR_TOP")
+    GameTooltip:AddLine(CFG.full and "Showing all routes" or "Showing routes for where you are", 1, 1, 1)
+    GameTooltip:AddLine("Click: " .. (CFG.full and "only routes for where you are" or "all routes") .. "  (/ob all)", 0.2, 1, 0.8)
+    GameTooltip:Show()
+  end)
+  titleBtn:SetScript("OnLeave", function() GameTooltip:Hide() end)
+
   -- Resize grip, bottom-right: drag to scale the whole window (0.6x to 2x). The top-left
   -- corner stays where it is. Hidden while the window is locked.
   local SCALE_MIN, SCALE_MAX = 0.6, 2.0
@@ -638,7 +836,7 @@ local OB_OK, OB_ERR = pcall(function ()
     row:SetHeight(ROW_H)
     row:SetPoint("TOPLEFT", panel, "TOPLEFT", 4, -(TOP + (i - 1) * ROW_H))
     row:SetPoint("RIGHT", panel, "RIGHT", -4, 0)
-    row:RegisterForClicks("LeftButtonUp")
+    row:RegisterForClicks("LeftButtonUp", "RightButtonUp")
     row:RegisterForDrag("LeftButton")
     row:SetScript("OnDragStart", StartDrag)
     row:SetScript("OnDragStop", StopDrag)
@@ -658,9 +856,6 @@ local OB_OK, OB_ERR = pcall(function ()
     row.name:SetPoint("LEFT", row.icon, "RIGHT", 4, 0)
     row.name:SetJustifyH("LEFT")
 
-    row.kind = row:CreateFontString(nil, "OVERLAY")
-    row.kind:SetFont(font, 10, "OUTLINE")
-    row.kind:SetTextColor(0.667, 0.667, 0.667)
 
     row.time = row:CreateFontString(nil, "OVERLAY")
     row.time:SetFont(font, 10, "OUTLINE")
@@ -675,15 +870,25 @@ local OB_OK, OB_ERR = pcall(function ()
     row.bell:Hide()
 
     row:SetScript("OnClick", function()
-      if not this.route then return end
-      DB.bell[this.route.entry] = (not Watched(this.route)) or nil
-      if Watched(this.route) then this.bell:Show() else this.bell:Hide() end
+      local r = this.route
+      if not r then return end
+      if arg1 == "RightButton" then
+        if r.flipFrom then
+          if CFG.full then DB.flip[r.entry] = (not Flipped(r)) or nil
+          else manualFlip[r.entry] = (not manualFlip[r.entry]) or nil end
+          local f = this:GetScript("OnEnter")
+          if f and MouseIsOver and MouseIsOver(this) then GameTooltip:Hide(); f() end
+        end
+        return
+      end
+      DB.bell[r.entry] = (not Watched(r)) or nil
+      if Watched(r) then this.bell:Show() else this.bell:Hide() end
     end)
     row:SetScript("OnEnter", function()
       local r = this.route
       if not r then return end
       GameTooltip:SetOwner(this, "ANCHOR_RIGHT")
-      GameTooltip:AddLine(RouteName(r), 1, 1, 1)
+      GameTooltip:AddLine(ShownName(r) .. " " .. r.kind, 1, 1, 1)
       GameTooltip:AddLine((Period(r) and ("Cycle " .. string.format("%.1f", Period(r)) .. "s, ") or "Cycle not measured, ") .. "stays " .. string.format("%.0f", Dwell(r)) .. "s   (object " .. r.entry .. ")", 0.7, 0.7, 0.7)
       if DB.origin[r.entry] and DB.anchor[r.entry] then
         local span = DB.anchor[r.entry] - DB.origin[r.entry]
@@ -691,7 +896,15 @@ local OB_OK, OB_ERR = pcall(function ()
           GameTooltip:AddLine("Cycle measured over " .. (span >= 86400 and string.format("%.1f days", span / 86400) or string.format("%.0f min", span / 60)) .. " of observations.", 0.7, 0.7, 0.7)
         end
       end
-      if r.far then
+      if Flipped(r) then
+        GameTooltip:AddLine("Times are for " .. Away(r) .. ": when it docks there and leaves for " .. r.flipTo .. ".", 0.7, 0.7, 0.7)
+        if FarKnown(r) then
+          GameTooltip:AddLine(Away(r) .. " end measured on a ride: docks there " .. string.format("%.0f", FarOff(r, Period(r))) .. "s into the cycle, stays " .. string.format("%.0f", FarDwell(r)) .. "s.", 0.7, 0.7, 0.7)
+        else
+          GameTooltip:AddLine(Away(r) .. " end not measured: assumed to dock halfway through the cycle, so treat it as rough. Ride it once (window open) to measure it.", 1, 0.6, 0.2)
+        end
+        GameTooltip:AddLine("Click: " .. (Watched(r) and "remove the bell (no chat alert)" or "add a bell: chat message " .. CFG.alert .. "s before it arrives at " .. Away(r)), 0.2, 1, 0.8)
+      elseif r.far then
         local lo = DB.lastObs[r.entry] or DB.anchor[r.entry] or r.anchor
         if r.periodGuess and not DB.period[r.entry] then
           GameTooltip:AddLine("Cycle is a rough estimate until the boat is seen docking at Ratchet once more.", 1, 0.6, 0.2)
@@ -708,6 +921,9 @@ local OB_OK, OB_ERR = pcall(function ()
       GameTooltip:AddLine(confirmed[r.entry] and "Seen this session: exact." or "Not seen this session: estimate (~).", 0.7, 0.7, 0.7)
       GameTooltip:AddLine("Click: " .. (Watched(r) and "remove the bell (no chat alert)" or "add a bell: chat message " .. CFG.alert .. "s before it arrives"), 0.2, 1, 0.8)
       end
+      if r.flipFrom then
+        GameTooltip:AddLine("Right-click: reverse to " .. (Flipped(r) and RouteName(r) or FlipName(r)), 0.2, 1, 0.8)
+      end
       GameTooltip:Show()
     end)
     row:SetScript("OnLeave", function() GameTooltip:Hide() end)
@@ -717,6 +933,7 @@ local OB_OK, OB_ERR = pcall(function ()
 
   -- returns state ("docked" / "wait" / nil), seconds (may be nil if unknown)
   local function Status(r)
+    if Flipped(r) then return Predict(r, true) end
     local ps, psecs = Predict(r)
     local live = seenState[r.entry]
     if live then
@@ -748,7 +965,7 @@ local OB_OK, OB_ERR = pcall(function ()
   end
 
   local function RowText(r)
-    if r.far and not seenState[r.entry] then
+    if r.far and not seenState[r.entry] and not Flipped(r) and not AtHome(r) then
       local fly, sail = FlyBy(r)
       if not fly then return RowName(r), nil, nil, "|cff888888not measured yet|r" end
       local color = "|cffffffff"
@@ -758,8 +975,10 @@ local OB_OK, OB_ERR = pcall(function ()
     end
     local state, secs = Status(r)
     local est = confirmed[r.entry] and "" or "|cff888888~|r"
-    local mark = ""
-    local nm = mark .. RowName(r)
+    local nm = RowName(r)
+    if Flipped(r) then
+      if not (confirmed[r.entry] and FarKnown(r)) then est = "|cff888888~|r" end
+    end
     if state == "docked" then
       if secs then
         return nm, state, secs, est .. "|cff55ff55leaves|r |cffffffff" .. FormatTime(secs) .. "|r"
@@ -778,7 +997,6 @@ local OB_OK, OB_ERR = pcall(function ()
 
   local function Refresh()
     local n = 0
-    local kindL, kindR = nil, nil
     for i = 1, table.getn(ROUTES) do
       local r = ROUTES[i]
       if Visible(r) then
@@ -787,7 +1005,7 @@ local OB_OK, OB_ERR = pcall(function ()
         row:Show()
         row.route = r
         local _, state, secs, txt = RowText(r)
-        local nm = DB.names[r.entry] or r.name
+        local nm = ShownName(r)
         if cal and cal.need[r.entry] then
           if (cal.got[r.entry] or 0) >= cal.need[r.entry] then
             nm = "|cff55ff55+|r " .. nm
@@ -797,14 +1015,6 @@ local OB_OK, OB_ERR = pcall(function ()
         end
         row.name:SetText(nm)
         row.time:SetText(txt)
-        row.kind:SetText(r.kind)
-        local nw, tw = row.name:GetStringWidth(), row.time:GetStringWidth()
-        if type(nw) ~= "number" then nw = 60 end
-        if type(tw) ~= "number" then tw = 60 end
-        local nameRight = 2 + 14 + 4 + nw
-        local timeLeft = (WIDTH - 8) - 20 - tw
-        if not kindL or nameRight > kindL then kindL = nameRight end
-        if not kindR or timeLeft < kindR then kindR = timeLeft end
         if Watched(r) then row.bell:Show() else row.bell:Hide() end
         if state == "docked" then
           row.icon:SetTexture(ICON_HERE)
@@ -821,17 +1031,9 @@ local OB_OK, OB_ERR = pcall(function ()
         end
       end
     end
-    -- transport types in one column, centred between the longest place name and the
-    -- widest timer of all rows
-    if kindL and kindR then
-      local cx = math.floor((kindL + kindR) / 2 + 0.5)
-      for i = 1, n do
-        rows[i].kind:ClearAllPoints()
-        rows[i].kind:SetPoint("CENTER", rows[i], "LEFT", cx, 0)
-      end
-    end
     for i = n + 1, table.getn(rows) do rows[i]:Hide() end
     panel:SetHeight(TOP + n * ROW_H + 18)
+    panel.title:SetText("|cff33ffccTransports|r" .. (CFG.full and " |cff777777- all|r" or ""))
     if recOn then
       panel.status:SetText("|cffff4444REC|r " .. (type(DB.rec) == "table" and table.getn(DB.rec) or 0))
     else
@@ -868,28 +1070,19 @@ local OB_OK, OB_ERR = pcall(function ()
     end
   end
 
-  -- Auto-show areas: Orgrimmar and Durotar (zone or sub-zone name), plus anything added with /ob allow.
-  -- Names are compared without capitals, quotes or outer spaces. The window also stays
-  -- open while a far route's transport (the Ratchet boat) is in view: on its dock and for
-  -- the whole crossing, which runs through zones that are not on the list.
-  local function Norm(n)
-    n = string.lower(n or "")
-    n = string.gsub(n, "[\"']", "")
-    n = string.gsub(n, "^%s+", "")
-    n = string.gsub(n, "%s+$", "")
-    return n
-  end
+  -- Auto-show: in any zone or sub-zone at either end of a route (or a planning place),
+  -- in a place added with /ob allow, or while a tracked transport is in view.
   local function InOrg()
+    UpdateLoc()
     if not CFG.zoneOnly then return true end
-    local z = Norm(GetZoneText())
-    local sz = Norm(GetSubZoneText())
-    if z == "orgrimmar" or sz == "orgrimmar" or z == "durotar" or sz == "durotar" then return true end
+    local z, sz = LOC.z, LOC.sz
     for i = 1, table.getn(CFG.allow) do
       local a = Norm(CFG.allow[i])
       if a ~= "" and (z == a or sz == a) then return true end
     end
     for i = 1, table.getn(ROUTES) do
-      if ROUTES[i].far and seenState[ROUTES[i].entry] then return true end
+      local r = ROUTES[i]
+      if InListAt(r.homeZ, z, sz) or InListAt(r.awayZ, z, sz) or InListAt(r.planZ, z, sz) or seenState[r.entry] then return true end
     end
     return false
   end
@@ -932,7 +1125,7 @@ local OB_OK, OB_ERR = pcall(function ()
     GameTooltip:SetOwner(this, "ANCHOR_LEFT")
     GameTooltip:AddLine("Transports", 0.2, 1, 0.8)
     GameTooltip:AddLine("Click: " .. (panel:IsShown() and "hide" or "show") .. " the window (works anywhere)", 1, 1, 1)
-    GameTooltip:AddLine("Opens by itself in Orgrimmar and Durotar.", 0.7, 0.7, 0.7)
+    GameTooltip:AddLine("Opens by itself at either end of any route.", 0.7, 0.7, 0.7)
     GameTooltip:AddLine("Drag: move this icon around the minimap", 0.7, 0.7, 0.7)
     GameTooltip:Show()
   end)
@@ -948,7 +1141,7 @@ local OB_OK, OB_ERR = pcall(function ()
   local function RunAlerts()
         for i = 1, table.getn(ROUTES) do
       local r = ROUTES[i]
-      if Visible(r) and r.far then
+      if Visible(r) and r.far and not Flipped(r) then
         local fly = FlyBy(r)
         if fly and Watched(r) and CFG.alert > 0 and fly <= CFG.alert then
           local stamp = math.floor(EpochNow() + fly + 0.5)
@@ -968,7 +1161,7 @@ local OB_OK, OB_ERR = pcall(function ()
               if alerted[r.entry] ~= stamp then
                 alerted[r.entry] = stamp
                 if CFG.chat then
-                  Say(RouteName(r) .. " arrives in " .. FormatTime(secs) .. ".")
+                  Say(ShownName(r) .. ": docks at " .. StartName(r) .. " in " .. FormatTime(secs) .. ".")
                 end
                 if CFG.sound then PlaySound("RaidWarning") end
                 if CFG.flash then flashUntil = GetTime() + 8 end
@@ -1058,7 +1251,7 @@ local OB_OK, OB_ERR = pcall(function ()
     elseif cmd == "sound" then Toggle("sound alert", "sound")
     elseif cmd == "chat"  then Toggle("chat alert", "chat")
     elseif cmd == "flash" then Toggle("minimap icon flash", "flash")
-    elseif cmd == "zone"  then Toggle("auto-show limited to Orgrimmar/Durotar (off = always show)", "zoneOnly")
+    elseif cmd == "zone"  then Toggle("auto-show only at route ends (off = always show)", "zoneOnly")
     elseif cmd == "where" then
       Say("zone: \"" .. (GetZoneText() or "") .. "\"  sub-zone: \"" .. (GetSubZoneText() or "") .. "\"  auto-shows here: " .. tostring(InOrg()))
     elseif cmd == "allow" then
@@ -1095,7 +1288,7 @@ local OB_OK, OB_ERR = pcall(function ()
 
     elseif cmd == "allowclear" then
       CFG.allow = {}
-      Say("extra places cleared (Orgrimmar and Durotar remain).")
+      Say("extra places cleared (route ends still open the window).")
     elseif cmd == "shape" then
       local v = string.lower(w[2] or "")
       if v == "square" or v == "round" then
@@ -1108,6 +1301,9 @@ local OB_OK, OB_ERR = pcall(function ()
       end
       PlaceButton()
       Say("minimap icon placement: " .. (CFG.shape or "auto") .. ".")
+    elseif cmd == "all" then
+      CFG.full = not CFG.full
+      Say(CFG.full and "showing all routes." or "showing routes for where you are.")
     elseif cmd == "boat"  then
       CFG.hideBoat = not CFG.hideBoat
       Say("Sparkwater Port boat " .. (CFG.hideBoat and "hidden" or "shown") .. ".")
@@ -1141,7 +1337,7 @@ local OB_OK, OB_ERR = pcall(function ()
         DB.names[r.entry] = text
         Say("route " .. w[2] .. " is now called: " .. RouteName(r))
       else
-        Say("usage: /ob name <number from /ob list> <new place name>   (the zeppelin / boat part stays)")
+        Say("usage: /ob name <number from /ob list> <new place name>   (renames the far end; the home end stays)")
       end
 
     elseif cmd == "period" then
@@ -1179,6 +1375,8 @@ local OB_OK, OB_ERR = pcall(function ()
       DB.period = {}
       DB.origin = {}
       DB.dwell = {}
+      DB.farOff = {}
+      DB.farDwell = {}
       DB.lastCal = nil
       DB.lastObs = {}
       DB.pending = {}
@@ -1222,7 +1420,7 @@ local OB_OK, OB_ERR = pcall(function ()
       if recOn then Say("recording: on, " .. table.getn(DB.rec) .. " lines so far.") end
 
     else
-      Say("/ob (window on/off)  |  list  |  alert <s>  |  sound|chat|flash|zone|boat|lock  |  scale <n>  |  where  |  shape <square|round|auto>  |  allow|disallow <name>  |  resetpos  |  name <n> <text>  |  period <n> <s>  |  travel <s>  |  calibrate  |  reset  |  debug [on|off]")
+      Say("/ob (window on/off)  |  list  |  alert <s>  |  all|sound|chat|flash|zone|boat|lock  |  scale <n>  |  where  |  shape <square|round|auto>  |  allow|disallow <name>  |  resetpos  |  name <n> <text>  |  period <n> <s>  |  travel <s>  |  calibrate  |  reset  |  debug [on|off]")
     end
   end
 

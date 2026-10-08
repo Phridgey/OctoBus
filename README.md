@@ -1,8 +1,10 @@
 # OctoBus
 
-Arrival timers for the zeppelins at the Orgrimmar towers, the Sparkwater Port boat, and the Ratchet to Booty Bay boat, for the vanilla 1.12.1 client (tested on OctoWow / Turtle WoW).
+Arrival timers for the Horde zeppelins and boats, for the vanilla 1.12.1 client (tested on OctoWow / Turtle WoW).
 
-A small minimap icon opens a window listing every transport with a live timer: how long until it **leaves** if it is docked, or how long until it **docks** if it is away. For the Ratchet boat it shows when to **fly** from Orgrimmar to make the next sailing. Click a transport to put a bell on it and get a chat message shortly before it arrives (or, for the Ratchet boat, shortly before you need to fly).
+Each row reads **start -> end**, for example `Orgrimmar -> Undercity`, with a live timer for the start: how long until it **leaves** if it is docked there, or how long until it **docks** there if it is away. Right-click a row to reverse it (`Undercity -> Orgrimmar`, timed at Undercity). For the Ratchet boat, seen from Orgrimmar, it shows when to **fly** to make the next sailing. Click a row to put a bell on it and get a chat message shortly before it arrives (or, for the Ratchet boat, shortly before you need to fly).
+
+See the [changelog](CHANGELOG.md) for what changed in each version.
 
 OctoBus needs one extra file, `ZepSense.dll`, which you install by hand in the game folder. Your launcher can install the addon but not the DLL. See [Install](#install).
 
@@ -15,10 +17,31 @@ OctoBus needs one extra file, `ZepSense.dll`, which you install by hand in the g
 | `~` before a time | An estimate from stored data. It goes away once you see the transport dock or leave. |
 | `fly 4:55 sails 6:40` | Ratchet boat only: leave Orgrimmar in 4:55 to be on the Ratchet dock before it sails in 6:40. If you can no longer make a sailing, it shows the next one. |
 | Bell on a row | Alerts are on for that route (click a row to toggle). |
-| Footer | The transport whose data is oldest, e.g. `oldest data: Undercity zeppelin, seen 3 h ago`. It turns orange after 5 days, as a hint to go and see it again. |
+| Title | Click it to switch between the routes for where you are and all routes (`Transports - all`). |
+| Footer | The route whose data is oldest, e.g. `oldest data: Orgrimmar -> Undercity, seen 3 h ago`. It turns orange after 5 days, as a hint to go and see it again. |
 | Dots, bottom-right corner | Drag to make the window bigger or smaller. |
+| Hover over a row | Cycle, stay at the dock, how the far end was measured, and what left- and right-click do. |
 
-Routes tracked (with built-in starting values, which refine themselves as you play): the Undercity, Grom'gol, Kargath and Thunder Bluff zeppelins, the Sparkwater Port boat (hide it with `/ob boat`), and the Ratchet boat. You can rename the place part of any route with `/ob name`.
+### Routes
+
+| Route | Type | Ends (where it shows up) |
+|---|---|---|
+| Orgrimmar <-> Undercity | zeppelin | Orgrimmar / Durotar; Tirisfal Glades / Undercity |
+| Orgrimmar <-> Grom'gol | zeppelin | Orgrimmar / Durotar; Stranglethorn Vale |
+| Orgrimmar <-> Kargath | zeppelin | Orgrimmar / Durotar; Badlands |
+| Orgrimmar <-> Thunder Bluff | zeppelin | Orgrimmar / Durotar; Mulgore / Thunder Bluff |
+| Grom'gol <-> Undercity | zeppelin | Stranglethorn Vale; Tirisfal Glades / Undercity |
+| Sparkwater <-> Revantusk | boat | Orgrimmar / Durotar; The Hinterlands (hide with `/ob boat`) |
+| Ratchet <-> Booty Bay | boat | Ratchet; Stranglethorn Vale. Also shown in Orgrimmar / Durotar, for planning. |
+
+Every route has built-in timings measured on rides (both ends, cycle and stay), which your copy keeps refining from what it sees. The far end of Grom'gol <-> Undercity is not measured yet; it is learned the first time you ride it from Grom'gol. You can rename the far end of a route with `/ob name`.
+
+### Which routes are shown
+
+- **Routes for where you are** (the default): only routes with an end in your zone, each reversed to start from your end. In Stranglethorn Vale, for example, you see `Grom'gol -> Orgrimmar`, `Grom'gol -> Undercity` and `Booty Bay -> Ratchet`. A right-click reverses a row until you change zone. A route whose transport is in view (for example while you ride it) is shown too. Somewhere with no routes, opening the window by hand shows the routes of the last place that had some.
+- **All routes**: every route, in the direction you last set with right-click (kept between sessions).
+
+Switch with a click on the window title, or `/ob all`.
 
 ## Requirements
 
@@ -49,8 +72,9 @@ Saved data lives in `WTF\...\SavedVariables\OctoBus.lua`.
 ## Using it
 
 - **Minimap icon**: click to show/hide the window anywhere; drag to move it around the minimap edge.
-- **Auto-show**: the window opens by itself in Orgrimmar and Durotar, and while the Ratchet boat is in view (on its dock and for the whole crossing). It hides elsewhere. The icon toggle always works manually. Add more auto-show places with `/ob allow <zone or sub-zone>` (capitals do not matter; `/ob where` shows the names), remove one with `/ob disallow <name>`, or turn the behaviour off with `/ob zone`.
-- **Bells**: click a transport row to toggle a bell. Belled routes print a chat message `/ob alert` seconds (default 45) before arrival. Nothing is printed to chat for routes without a bell.
+- **Auto-show**: the window opens by itself at either end of any route (the zones in the table above), and while a tracked transport is in view, such as on a crossing. It hides elsewhere. The icon toggle always works manually. Add more auto-show places with `/ob allow <zone or sub-zone>` (capitals do not matter; `/ob where` shows the names), remove one with `/ob disallow <name>`, or turn the behaviour off with `/ob zone`.
+- **Bells**: click a row to toggle a bell. Belled routes print a chat message `/ob alert` seconds (default 45) before the transport docks at the row's start, e.g. `Orgrimmar -> Undercity: docks at Orgrimmar in 0:45`. Nothing is printed to chat for routes without a bell.
+- **Reverse a row**: right-click it.
 - **Move and size the window**: drag it to move it; drag the dots in the bottom-right corner (or use `/ob scale`) to resize it. `/ob lock` locks position and size; `/ob resetpos` puts the window and icon back at their default place and size.
 
 ## How the timing works
@@ -60,11 +84,12 @@ Each route runs on a fixed cycle. Once the addon sees one transport arrive, it c
 - **Automatic calibration**: any arrival you watch near the towers calibrates that route. The first time takes two sightings, later refreshes take one. The cycle length is refined as more arrivals are seen, and the dock-time (how long a transport waits) is learned too.
 - **`/ob calibrate`** (optional): watches every transport on purpose. Stand between the two towers where you can see the docks, do not `/reload`, and wait; rows are marked complete as each route is confirmed. A transport being out of view for a while is normal. If nothing at all has been seen after about 10 minutes, move closer to the towers. `/ob calibrate stop` cancels.
 - Transports are not reported from deep inside the city (bank / auction house area), so calibrate near the towers.
+- **Far ends are learned by riding.** When a transport stands still for 20 s away from its home dock, it is docked at the far end: the addon stores when it docked there (relative to its schedule) and how long it stayed. This needs the home end to have been seen earlier in the same session (for example, it leaving Orgrimmar with you on board), and the transport to be seen arriving. No recording is needed.
 - **One odd sighting does not wipe a route's history.** A sighting that does not fit the schedule is set aside; the schedule only starts over (for example after a server restart) when a second sighting agrees with it.
 
 ### The Ratchet boat
 
-The Ratchet boat cannot be seen from Orgrimmar, so its row is always an estimate (`~`) built from the last time you saw it at Ratchet, or from the built-in timing if you never have. The built-in timing was measured on two rides (cycle 364.07 s, 64 s at the dock). Every time you are at Ratchet with the boat in view (the DLL is needed for this), your copy corrects its timing and refines the cycle, so predictions stay accurate for longer the more often you have been there. Nothing is shared between players: each copy only learns from what its own player sees.
+The Ratchet boat cannot be seen from Orgrimmar, so its row is always an estimate (`~`) built from the last time you saw it at Ratchet, or from the built-in timing if you never have. The built-in timing was measured over several rides (cycle 363.95 s, 64 s at each dock, docks at Booty Bay 178.6 s after Ratchet). At Ratchet itself the row shows plain docks / leaves times instead of `fly`. Every time you are at Ratchet with the boat in view (the DLL is needed for this), your copy corrects its timing and refines the cycle, so predictions stay accurate for longer the more often you have been there. Nothing is shared between players: each copy only learns from what its own player sees.
 
 `fly` is the boat's departure from Ratchet minus your travel time from Orgrimmar to the dock. Set your own with `/ob travel <seconds>` (default 175: enough for a slower mount, with some time to spare; time your own trip from take-off at the Orgrimmar flight master to standing on the boat).
 
@@ -78,18 +103,19 @@ The Ratchet boat cannot be seen from Orgrimmar, so its row is always an estimate
 | `/ob list` | Print all timers in chat |
 | `/ob alert <sec>` | Bell alerts fire this many seconds before arrival (default 45, `0` = off) |
 | `/ob chat`, `/ob sound`, `/ob flash` | Toggle that alert type (chat on by default; sound and screen flash off) |
-| `/ob zone` | Toggle "auto-show only in Orgrimmar / Durotar" |
+| `/ob all` | Switch between routes for where you are and all routes (same as clicking the title) |
+| `/ob zone` | Toggle "auto-show only at route ends" (off = always show) |
 | `/ob allow <name>` | Also auto-show in this zone or sub-zone |
 | `/ob disallow <name>` | Take a place off that list |
 | `/ob allowclear` | Remove all the extra auto-show places |
 | `/ob where` | Print your zone / sub-zone and whether the window auto-shows here |
-| `/ob boat` | Show / hide the Sparkwater Port boat |
+| `/ob boat` | Show / hide the Sparkwater <-> Revantusk boat |
 | `/ob shape square\|round\|auto` | Minimap icon placement. `auto` reads your minimap shape (tell it explicitly if you use a square minimap addon and the icon sits wrong) |
 | `/ob travel <sec>` | Your travel time from Orgrimmar to the Ratchet dock, used for `fly` |
 | `/ob scale <n>` | Window size, 0.6 to 2 (same as dragging the bottom-right corner) |
 | `/ob lock` | Lock / unlock the window position and size |
 | `/ob resetpos` | Put the window and icon back in their default spots and size |
-| `/ob name <n> <text>` | Rename route number `n` (numbers from `/ob list`) |
+| `/ob name <n> <text>` | Rename the far end of route number `n` (numbers from `/ob list`) |
 | `/ob period <n> <sec>` | Set a route's cycle length by hand |
 | `/ob calibrate` | Watch all transports on purpose (see above); `/ob calibrate stop` cancels |
 | `/ob reset` | Forget everything learned and go back to built-in values |
@@ -99,7 +125,8 @@ The Ratchet boat cannot be seen from Orgrimmar, so its row is always an estimate
 ## Troubleshooting
 
 - **"no DLL: estimates only"**: the DLL is not loaded. Check that `ZepSense.dll` is in the game folder and listed in `dlls.txt`, then fully restart the game. `/ob debug` shows the state.
-- **Times have a `~` and never confirm**: walk toward the towers and wait for an arrival, or run `/ob calibrate`.
+- **Times have a `~` and never confirm**: go to that end of the route and wait for an arrival, or at the Orgrimmar towers run `/ob calibrate`.
+- **A route I want is missing from the window**: you are in the "where you are" view and not at either end of it. Click the title to see all routes.
 - **`/ob` does nothing or prints a start-up error**: the addon reports its own load errors in chat; copy the message when reporting a bug.
 - **Window did not auto-show**: use `/ob where` to see your zone and sub-zone names, then `/ob allow <name>` if you want it there.
 - **Ratchet times look wrong**: it has probably been a long time, or there was a server restart, since you last saw it. Visit Ratchet with the window open and wait for the boat to dock.
