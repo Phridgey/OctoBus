@@ -15,6 +15,8 @@ OctoBus needs one extra file, `ZepSense.dll`, which you install by hand in the g
 | Green check | Transport is docked now. The timer counts down to departure ("leaves"). |
 | Red X | Transport is away. The timer counts down to docking ("docks"). |
 | `~` before a time | An estimate from stored data. It goes away once you see the transport dock or leave. |
+| `departing` (yellow) | The transport is still at the dock past its scheduled time and is about to leave. |
+| `fly now` (red) | Ratchet boat: it is already time to leave Orgrimmar for this sailing; the row stays on it until the boat sails. |
 | `fly 4:55 sails 6:40` | Ratchet boat only: leave Orgrimmar in 4:55 to be on the Ratchet dock before it sails in 6:40. If you can no longer make a sailing, it shows the next one. |
 | Bell on a row | Alerts are on for that route (click a row to toggle). |
 | Title | Click it to switch between the routes for where you are and all routes (`Transports - all`). |

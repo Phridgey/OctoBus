@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.2.1 (9 October 2026)
+
+### Fixed
+- A transport still at its dock after its scheduled departure showed "here now" in green. It now shows **departing** in yellow, since it is about to pull away.
+- When it was time to fly for the Ratchet boat, the row jumped straight to the next sailing. It now stays on the current boat and shows **fly now** (counting down to when it sails) until that boat has left Ratchet, then moves on to the next one. A bell on that row now says "fly to Ratchet now".
+
 ## 1.2 (8 October 2026)
 
 ### New
