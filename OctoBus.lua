@@ -939,7 +939,8 @@ local OB_OK, OB_ERR = pcall(function ()
     if live then
       if live.atDock then
         if ps == "docked" then return "docked", psecs end
-        return "docked", nil
+        -- Still at the dock after its scheduled departure: it is about to pull away.
+        return "departing", nil
       else
         if ps == "wait" then return "wait", psecs end
         return "wait", nil
@@ -955,12 +956,10 @@ local OB_OK, OB_ERR = pcall(function ()
     if not state then return nil end
     local sail = secs
     if state == "wait" then sail = secs + Dwell(r) end
-    local P = Period(r)
+    -- Stay on the boat that is in port (or on its way) until it has actually sailed:
+    -- once the time to fly has passed, show "fly now" rather than jumping to the next
+    -- sailing. Only after this boat leaves does the row move on to the next one.
     local fly = sail - CFG.travel
-    while fly < 0 do
-      sail = sail + P
-      fly = fly + P
-    end
     return fly, sail
   end
 
@@ -968,6 +967,9 @@ local OB_OK, OB_ERR = pcall(function ()
     if r.far and not seenState[r.entry] and not Flipped(r) and not AtHome(r) then
       local fly, sail = FlyBy(r)
       if not fly then return RowName(r), nil, nil, "|cff888888not measured yet|r" end
+      if fly <= 0 then
+        return RowName(r), "fly", 0, "|cff888888~|r|cffff5555fly now|r |cff777777sails " .. FormatTime(sail) .. "|r"
+      end
       local color = "|cffffffff"
       if CFG.alert > 0 and fly <= CFG.alert then color = "|cffffaa33" end
       return RowName(r), "fly", fly, "|cff888888~|r|cffaaaaaafly|r " .. color .. FormatTime(fly) ..
@@ -984,6 +986,8 @@ local OB_OK, OB_ERR = pcall(function ()
         return nm, state, secs, est .. "|cff55ff55leaves|r |cffffffff" .. FormatTime(secs) .. "|r"
       end
       return nm, state, nil, "|cff55ff55here now|r"
+    elseif state == "departing" then
+      return nm, state, nil, "|cffffd200departing|r"
     elseif state == "wait" then
       if secs then
         local color = "|cffffffff"
@@ -1020,6 +1024,10 @@ local OB_OK, OB_ERR = pcall(function ()
           row.icon:SetTexture(ICON_HERE)
           row.icon:SetVertexColor(0.3, 1, 0.3)
           row.bg:SetVertexColor(0.1, 0.5, 0.1, 0.35)
+        elseif state == "departing" then
+          row.icon:SetTexture(ICON_HERE)
+          row.icon:SetVertexColor(1, 0.82, 0)
+          row.bg:SetVertexColor(0.5, 0.4, 0, 0.3)
         else
           row.icon:SetTexture(ICON_AWAY)
           if secs and CFG.alert > 0 and secs <= CFG.alert then
@@ -1147,7 +1155,7 @@ local OB_OK, OB_ERR = pcall(function ()
           local stamp = math.floor(EpochNow() + fly + 0.5)
           if alerted[r.entry] ~= stamp then
             alerted[r.entry] = stamp
-            if CFG.chat then Say(RouteName(r) .. ": fly to Ratchet in " .. FormatTime(fly) .. ".") end
+            if CFG.chat then Say(RouteName(r) .. (fly <= 0 and ": fly to Ratchet now." or (": fly to Ratchet in " .. FormatTime(fly) .. "."))) end
             if CFG.sound then PlaySound("RaidWarning") end
             if CFG.flash then flashUntil = GetTime() + 8 end
           end
