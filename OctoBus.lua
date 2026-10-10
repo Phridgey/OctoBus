@@ -275,10 +275,10 @@ local OB_OK, OB_ERR = pcall(function ()
 
   -- Each place has its own colour in the rows; renamed or unknown places stay white.
   local PLACE_COLOR = {
-    ["orgrimmar"] = "ff5544", ["undercity"] = "b48cff", ["gromgol"] = "66dd55",
-    ["kargath"] = "e09a55", ["thunder bluff"] = "e8cc77", ["sparkwater"] = "44ccff",
-    ["revantusk"] = "33bba0", ["revantusk village"] = "33bba0", ["ratchet"] = "ffdd33",
-    ["booty bay"] = "ff88cc",
+    ["orgrimmar"] = "7f2a22", ["undercity"] = "5a467f", ["gromgol"] = "336e2a",
+    ["kargath"] = "704d2a", ["thunder bluff"] = "74663b", ["sparkwater"] = "22667f",
+    ["revantusk"] = "195d50", ["revantusk village"] = "195d50", ["ratchet"] = "7f6e19",
+    ["booty bay"] = "7f4466",
   }
   local function Paint(n) return "|cff" .. (PLACE_COLOR[Norm(n)] or "ffffff") .. n .. "|r" end
   local function ColoredName(r)
@@ -648,7 +648,7 @@ local OB_OK, OB_ERR = pcall(function ()
       tile = false, tileSize = 0, edgeSize = 1,
       insets = { left = 1, right = 1, top = 1, bottom = 1 },
     })
-    f:SetBackdropColor(0.02, 0.02, 0.02, 0.92)
+    f:SetBackdropColor(0.02, 0.02, 0.02, 0.75)
     f:SetBackdropBorderColor(0.22, 0.22, 0.22, 1)
   end
 
