@@ -16,8 +16,10 @@ OctoBus needs one extra file, `ZepSense.dll`, which you install by hand in the g
 | Red X | Transport is away. The timer counts down to docking ("docks"). |
 | `~` before a time | An estimate from stored data. It goes away once you see the transport dock or leave. |
 | `departing` (yellow) | The transport is still at the dock past its scheduled time and is about to leave. |
-| `fly now` (red) | Ratchet boat: it is already time to leave Orgrimmar for this sailing; the row stays on it until the boat sails. |
+| `fly now` (red) | Ratchet boat: it is time to leave Orgrimmar for this sailing. It shows for 10 seconds, then the row moves on to the next sailing you can still make. |
 | `fly 4:55 sails 6:40` | Ratchet boat only: leave Orgrimmar in 4:55 to be on the Ratchet dock before it sails in 6:40. If you can no longer make a sailing, it shows the next one. |
+| Place colours | Each place name has its own colour (Orgrimmar red, Undercity purple, Grom'gol green, and so on). A far end renamed with `/ob name` shows in white. |
+| Row order | Soonest first: whatever docks, leaves or needs you to fly next is at the top. Rows move as the timers change. |
 | Bell on a row | Alerts are on for that route (click a row to toggle). |
 | Title | Click it to switch between the routes for where you are and all routes (`Transports - all`). |
 | Footer | The route whose data is oldest, e.g. `oldest data: Orgrimmar -> Undercity, seen 3 h ago`. It turns orange after 5 days, as a hint to go and see it again. |

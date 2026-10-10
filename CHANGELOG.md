@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.3 (9 October 2026)
+
+### New
+- **Place names are colour coded**: Orgrimmar red, Undercity purple, Grom'gol green, Kargath orange-brown, Thunder Bluff tan, Sparkwater light blue, Revantusk teal, Ratchet gold and Booty Bay pink. A far end renamed with `/ob name` shows in white.
+- **Rows are sorted by what happens soonest**: the next arrival, departure or time to fly is at the top. "Departing" and "fly now" rows go first, and rows with no timer go last.
+
+### Fixed
+- The Ratchet boat's "fly now" stayed up until the boat sailed, even when it was far too late to make it. It now shows for 10 seconds after your time to fly, then moves on to the next sailing you can still make.
+
 ## 1.2.1 (9 October 2026)
 
 ### Fixed

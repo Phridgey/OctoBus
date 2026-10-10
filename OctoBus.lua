@@ -273,6 +273,20 @@ local OB_OK, OB_ERR = pcall(function ()
   local function StartName(r) if Flipped(r) then return Away(r) end return r.flipTo end
   local RowName = ShownName
 
+  -- Each place has its own colour in the rows; renamed or unknown places stay white.
+  local PLACE_COLOR = {
+    ["orgrimmar"] = "ff5544", ["undercity"] = "b48cff", ["gromgol"] = "66dd55",
+    ["kargath"] = "e09a55", ["thunder bluff"] = "e8cc77", ["sparkwater"] = "44ccff",
+    ["revantusk"] = "33bba0", ["revantusk village"] = "33bba0", ["ratchet"] = "ffdd33",
+    ["booty bay"] = "ff88cc",
+  }
+  local function Paint(n) return "|cff" .. (PLACE_COLOR[Norm(n)] or "ffffff") .. n .. "|r" end
+  local function ColoredName(r)
+    local a, b = r.flipTo, Away(r)
+    if Flipped(r) then a, b = b, a end
+    return Paint(a) .. " |cff777777->|r " .. Paint(b)
+  end
+
   -- Far end timing: learned on a ride (DB.farOff / DB.farDwell), else built in, else the
   -- rough "halfway through the cycle, same stay" assumption. FarKnown = not a guess.
   local function FarKnown(r) return (DB.farOff[r.entry] or r.flipOffset) ~= nil end
@@ -956,10 +970,14 @@ local OB_OK, OB_ERR = pcall(function ()
     if not state then return nil end
     local sail = secs
     if state == "wait" then sail = secs + Dwell(r) end
-    -- Stay on the boat that is in port (or on its way) until it has actually sailed:
-    -- once the time to fly has passed, show "fly now" rather than jumping to the next
-    -- sailing. Only after this boat leaves does the row move on to the next one.
+    -- Once the time to fly has passed, keep showing "fly now" for 10 s (about the
+    -- slack in the travel time) instead of jumping straight to the next sailing. After
+    -- that this boat can no longer be made, so move on to the next one.
     local fly = sail - CFG.travel
+    if fly < -10 then
+      sail = sail + Period(r)
+      fly = sail - CFG.travel
+    end
     return fly, sail
   end
 
@@ -999,17 +1017,32 @@ local OB_OK, OB_ERR = pcall(function ()
     return nm, state, nil, "|cff888888--|r"
   end
 
+  -- Rows are sorted by what happens soonest: the next arrival, departure or time to fly.
   local function Refresh()
-    local n = 0
+    local list = {}
     for i = 1, table.getn(ROUTES) do
       local r = ROUTES[i]
       if Visible(r) then
+        local _, state, secs, txt = RowText(r)
+        local key = secs or 100000
+        if state == "departing" or (state == "fly" and secs <= 0) then key = 0 end
+        table.insert(list, { r = r, state = state, secs = secs, txt = txt, key = key, i = i })
+      end
+    end
+    table.sort(list, function(x, y)
+      if x.key ~= y.key then return x.key < y.key end
+      return x.i < y.i
+    end)
+    local n = 0
+    for k = 1, table.getn(list) do
+      local e = list[k]
+      local r, state, secs, txt = e.r, e.state, e.secs, e.txt
+      do
         n = n + 1
         local row = rows[n] or CreateRow(n)
         row:Show()
         row.route = r
-        local _, state, secs, txt = RowText(r)
-        local nm = ShownName(r)
+        local nm = ColoredName(r)
         if cal and cal.need[r.entry] then
           if (cal.got[r.entry] or 0) >= cal.need[r.entry] then
             nm = "|cff55ff55+|r " .. nm
