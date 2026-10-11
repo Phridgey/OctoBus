@@ -3,7 +3,7 @@
 ## 1.3.1 (10 October 2026)
 
 ### Changed
-- Place colours are toned down (half as bright), so they are easier on the eye.
+- Place colours are toned down (75% as bright), so they are easier on the eye.
 - The window background is more see-through: 75% opaque instead of 92%.
 
 ## 1.3 (9 October 2026)

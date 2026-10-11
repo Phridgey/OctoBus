@@ -275,10 +275,10 @@ local OB_OK, OB_ERR = pcall(function ()
 
   -- Each place has its own colour in the rows; renamed or unknown places stay white.
   local PLACE_COLOR = {
-    ["orgrimmar"] = "7f2a22", ["undercity"] = "5a467f", ["gromgol"] = "336e2a",
-    ["kargath"] = "704d2a", ["thunder bluff"] = "74663b", ["sparkwater"] = "22667f",
-    ["revantusk"] = "195d50", ["revantusk village"] = "195d50", ["ratchet"] = "7f6e19",
-    ["booty bay"] = "7f4466",
+    ["orgrimmar"] = "bf3f33", ["undercity"] = "8769bf", ["gromgol"] = "4ca53f",
+    ["kargath"] = "a8733f", ["thunder bluff"] = "ae9959", ["sparkwater"] = "3399bf",
+    ["revantusk"] = "268c78", ["revantusk village"] = "268c78", ["ratchet"] = "bfa526",
+    ["booty bay"] = "bf6699",
   }
   local function Paint(n) return "|cff" .. (PLACE_COLOR[Norm(n)] or "ffffff") .. n .. "|r" end
   local function ColoredName(r)
