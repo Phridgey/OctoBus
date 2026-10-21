@@ -1848,6 +1848,7 @@ local OB_OK, OB_ERR = pcall(function ()
     f:SetScript("OnEvent", function()
       Repair134()
       Repair136()
+      DB.rec = nil   -- an old /ob debug recording is not kept between sessions (it can be large)
       panel:SetScale(CFG.scale or 1)
       ApplyLook()
       if CFG.locked then grip:Hide() else grip:Show() end
